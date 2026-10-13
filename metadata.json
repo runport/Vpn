@@ -1,0 +1,6 @@
+{
+  "name": "AzadiYar",
+  "description": "ابزار هوشمند دسترسی به اینترنت بین‌المللی، جمع‌آوری کانفیگ، تست خودکار و عیب‌یابی شبکه",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
