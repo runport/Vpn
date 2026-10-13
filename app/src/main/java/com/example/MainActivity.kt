@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MedicalServices
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.VpnLock
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -40,15 +41,16 @@ import com.example.ui.components.RtlProvider
 import com.example.ui.screens.ConfigsScreen
 import com.example.ui.screens.DiagnosticsScreen
 import com.example.ui.screens.HomeScreen
+import com.example.ui.screens.ProxiesScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.screens.SourcesScreen
 import com.example.ui.theme.AzadiYarTheme
 import com.example.ui.viewmodel.MainViewModel
 
-import androidx.compose.material.icons.filled.VpnLock
-import com.example.ui.screens.ProxiesScreen
-
-enum class AppScreen(val titlePersian: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
+enum class AppScreen(
+    val titlePersian: String,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector
+) {
     HOME("داشبورد", Icons.Default.Home),
     CONFIGS("کانفیگ‌ها", Icons.Default.Tune),
     PROXIES("پروکسی‌ها", Icons.Default.VpnLock),
@@ -58,7 +60,6 @@ enum class AppScreen(val titlePersian: String, val icon: androidx.compose.ui.gra
 }
 
 class MainActivity : ComponentActivity() {
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -78,27 +79,43 @@ fun MainAppScaffold(
     var currentScreen by remember { mutableStateOf(AppScreen.HOME) }
     val context = LocalContext.current
 
-    // VPN Permission Launcher
+    var connectAfterPermission by remember { mutableStateOf(false) }
+
     val vpnPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
+        val shouldConnect = connectAfterPermission
+        connectAfterPermission = false
+
+        if (result.resultCode == Activity.RESULT_OK && shouldConnect) {
             viewModel.connectSmart()
         }
     }
 
-    // Android 13+ Notification Permission Launcher
-    val notificationPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { _ -> }
+    val requestVpnPermission = {
+        val permissionIntent = VpnService.prepare(context)
 
-    LaunchedEffect(Unit) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        if (permissionIntent == null) {
+            viewModel.connectSmart()
+        } else {
+            connectAfterPermission = true
+            vpnPermissionLauncher.launch(permissionIntent)
         }
     }
 
-    // Handle back button on sub-screens
+    val notificationPermissionLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.RequestPermission()
+        ) { }
+
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            notificationPermissionLauncher.launch(
+                android.Manifest.permission.POST_NOTIFICATIONS
+            )
+        }
+    }
+
     if (currentScreen != AppScreen.HOME) {
         BackHandler {
             currentScreen = AppScreen.HOME
@@ -122,8 +139,15 @@ fun MainAppScaffold(
                                     contentDescription = screen.titlePersian
                                 )
                             },
-                            label = { Text(screen.titlePersian, fontSize = 11.sp) },
-                            modifier = Modifier.testTag("nav_${screen.name.lowercase()}")
+                            label = {
+                                Text(
+                                    text = screen.titlePersian,
+                                    fontSize = 11.sp
+                                )
+                            },
+                            modifier = Modifier.testTag(
+                                "nav_${screen.name.lowercase()}"
+                            )
                         )
                     }
                 }
@@ -133,9 +157,15 @@ fun MainAppScaffold(
             when (currentScreen) {
                 AppScreen.HOME -> HomeScreen(
                     viewModel = viewModel,
-                    onNavigateToConfigs = { currentScreen = AppScreen.CONFIGS },
-                    onNavigateToDiagnostics = { currentScreen = AppScreen.DIAGNOSTICS },
-                    onNavigateToSources = { currentScreen = AppScreen.SOURCES },
+                    onNavigateToConfigs = {
+                        currentScreen = AppScreen.CONFIGS
+                    },
+                    onNavigateToDiagnostics = {
+                        currentScreen = AppScreen.DIAGNOSTICS
+                    },
+                    onNavigateToSources = {
+                        currentScreen = AppScreen.SOURCES
+                    },
                     modifier = Modifier.padding(innerPadding)
                 )
 
