@@ -71,6 +71,7 @@ fun HomeScreen(
     onNavigateToConfigs: () -> Unit,
     onNavigateToDiagnostics: () -> Unit,
     onNavigateToSources: () -> Unit,
+    onConnectRequest: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val connectionState by viewModel.connectionState.collectAsState()
@@ -195,7 +196,7 @@ fun HomeScreen(
                             if (isConnected || isConnecting) {
                                 viewModel.disconnect()
                             } else {
-                                viewModel.connectSmart()
+                                onConnectRequest()
                             }
                         }
                         .testTag("main_connect_button")
@@ -358,7 +359,7 @@ fun HomeScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Button(
-                    onClick = { viewModel.connectSmart() },
+                    onClick = { onConnectRequest() },
                     modifier = Modifier
                         .weight(1f)
                         .testTag("quick_smart_select_button"),
