@@ -1,7 +1,7 @@
+
 package com.example
 
 import android.app.Activity
-import android.content.Intent
 import android.net.VpnService
 import android.os.Build
 import android.os.Bundle
@@ -76,10 +76,15 @@ class MainActivity : ComponentActivity() {
 fun MainAppScaffold(
     viewModel: MainViewModel = viewModel()
 ) {
-    var currentScreen by remember { mutableStateOf(AppScreen.HOME) }
+    var currentScreen by remember {
+        mutableStateOf(AppScreen.HOME)
+    }
+
     val context = LocalContext.current
 
-    var connectAfterPermission by remember { mutableStateOf(false) }
+    var connectAfterPermission by remember {
+        mutableStateOf(false)
+    }
 
     val vpnPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
@@ -132,7 +137,9 @@ fun MainAppScaffold(
                     AppScreen.entries.forEach { screen ->
                         NavigationBarItem(
                             selected = currentScreen == screen,
-                            onClick = { currentScreen = screen },
+                            onClick = {
+                                currentScreen = screen
+                            },
                             icon = {
                                 Icon(
                                     imageVector = screen.icon,
@@ -166,6 +173,7 @@ fun MainAppScaffold(
                     onNavigateToSources = {
                         currentScreen = AppScreen.SOURCES
                     },
+                    onConnectRequest = requestVpnPermission,
                     modifier = Modifier.padding(innerPadding)
                 )
 
