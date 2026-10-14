@@ -150,6 +150,12 @@ class AzadiRepository(private val database: AzadiDatabase) {
         return proxyDao.deleteFailedProxies()
     }
 
+    suspend fun deleteFailedConfigsAndProxies(): Pair<Int, Int> {
+        val cfgCount = configDao.deleteFailedConfigs()
+        val prxCount = proxyDao.deleteFailedProxies()
+        return cfgCount to prxCount
+    }
+
     suspend fun ensureDefaultSourcesPopulated() {
         val count = sourceDao.getSourceCount()
         if (count == 0) {

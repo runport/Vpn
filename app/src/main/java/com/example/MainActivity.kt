@@ -1,4 +1,3 @@
-
 package com.example
 
 import android.app.Activity
@@ -37,10 +36,12 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.diagnostics.AppLogger
 import com.example.ui.components.RtlProvider
 import com.example.ui.screens.ConfigsScreen
 import com.example.ui.screens.DiagnosticsScreen
 import com.example.ui.screens.HomeScreen
+import com.example.ui.screens.LogsScreen
 import com.example.ui.screens.ProxiesScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.screens.SourcesScreen
@@ -76,34 +77,33 @@ class MainActivity : ComponentActivity() {
 fun MainAppScaffold(
     viewModel: MainViewModel = viewModel()
 ) {
-    var currentScreen by remember {
-        mutableStateOf(AppScreen.HOME)
-    }
+    var currentScreen by remember { mutableStateOf(AppScreen.HOME) }
+    var showLogsScreen by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
 
-    var connectAfterPermission by remember {
-        mutableStateOf(false)
-    }
+    var pendingVpnAction by remember { mutableStateOf<(() -> Unit)?>(null) }
 
     val vpnPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
-        val shouldConnect = connectAfterPermission
-        connectAfterPermission = false
+        val action = pendingVpnAction
+        pendingVpnAction = null
 
-        if (result.resultCode == Activity.RESULT_OK && shouldConnect) {
-            viewModel.connectSmart()
+        if (result.resultCode == Activity.RESULT_OK) {
+            AppLogger.s("VPN", "مجوز برقراری اتصال VPN توسط کاربر تأیید شد")
+            action?.invoke()
+        } else {
+            AppLogger.w("VPN", "کاربر درخواست برقراری تونل VPN را رد کرد")
         }
     }
 
-    val requestVpnPermission = {
+    val requestVpnPermission: (action: () -> Unit) -> Unit = { action ->
         val permissionIntent = VpnService.prepare(context)
-
         if (permissionIntent == null) {
-            viewModel.connectSmart()
+            action()
         } else {
-            connectAfterPermission = true
+            pendingVpnAction = action
             vpnPermissionLauncher.launch(permissionIntent)
         }
     }
@@ -119,6 +119,19 @@ fun MainAppScaffold(
                 android.Manifest.permission.POST_NOTIFICATIONS
             )
         }
+    }
+
+    if (showLogsScreen) {
+        BackHandler {
+            showLogsScreen = false
+        }
+        RtlProvider {
+            LogsScreen(
+                viewModel = viewModel,
+                onNavigateBack = { showLogsScreen = false }
+            )
+        }
+        return
     }
 
     if (currentScreen != AppScreen.HOME) {
@@ -173,17 +186,22 @@ fun MainAppScaffold(
                     onNavigateToSources = {
                         currentScreen = AppScreen.SOURCES
                     },
+                    onNavigateToLogs = {
+                        showLogsScreen = true
+                    },
                     onConnectRequest = requestVpnPermission,
                     modifier = Modifier.padding(innerPadding)
                 )
 
                 AppScreen.CONFIGS -> ConfigsScreen(
                     viewModel = viewModel,
+                    onRequestConnect = requestVpnPermission,
                     modifier = Modifier.padding(innerPadding)
                 )
 
                 AppScreen.PROXIES -> ProxiesScreen(
                     viewModel = viewModel,
+                    onRequestConnect = requestVpnPermission,
                     modifier = Modifier.padding(innerPadding)
                 )
 

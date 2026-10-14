@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -26,33 +27,48 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.HealthAndSafety
 import androidx.compose.material.icons.filled.PowerSettingsNew
+import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.VpnLock
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -61,9 +77,11 @@ import androidx.compose.ui.unit.sp
 import com.example.core.model.ConnectionState
 import com.example.core.model.TestStatus
 import com.example.ui.components.PingBadge
-import com.example.ui.components.ProtocolBadge
 import com.example.ui.components.RtlProvider
+import com.example.ui.components.ShareQrDialog
 import com.example.ui.viewmodel.MainViewModel
+import kotlinx.coroutines.delay
+import java.util.Locale
 
 @Composable
 fun HomeScreen(
@@ -71,21 +89,26 @@ fun HomeScreen(
     onNavigateToConfigs: () -> Unit,
     onNavigateToDiagnostics: () -> Unit,
     onNavigateToSources: () -> Unit,
-    onConnectRequest: () -> Unit,
+    onNavigateToLogs: () -> Unit = {},
+    onConnectRequest: (action: () -> Unit) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val connectionState by viewModel.connectionState.collectAsState()
     val configs by viewModel.filteredConfigs.collectAsState()
+    val proxies by viewModel.proxies.collectAsState()
     val fetchProgress by viewModel.fetchProgress.collectAsState()
     val proxyFetchProgress by viewModel.proxyFetchProgress.collectAsState()
 
+    var showShareQrDialog by remember { mutableStateOf(false) }
+
     val totalConfigs = configs.size
+    val totalProxies = proxies.size
     val healthyConfigs = configs.count {
         it.testStatus == TestStatus.GLOBAL_ACCESS_CONFIRMED ||
                 it.testStatus == TestStatus.TUNNEL_CONNECTED ||
                 it.testStatus == TestStatus.REACHABLE_ENDPOINT
     }
-    val untestedConfigs = configs.count { it.testStatus == TestStatus.UNTESTED }
     val bypassConfigs = configs.count { it.isBypassNationalNet }
     val halfPriceConfigs = configs.count { it.isHalfPriceDomestic }
 
@@ -103,15 +126,29 @@ fun HomeScreen(
         label = "pulseScale"
     )
 
+    // Live connection timer
+    var durationSeconds by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(connectionState) {
+        if (connectionState is ConnectionState.Connected) {
+            val startTime = (connectionState as ConnectionState.Connected).connectedAt
+            while (true) {
+                durationSeconds = ((System.currentTimeMillis() - startTime) / 1000).coerceAtLeast(0)
+                delay(1000)
+            }
+        } else {
+            durationSeconds = 0L
+        }
+    }
+
     RtlProvider {
         Column(
             modifier = modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 16.dp),
+                .padding(horizontal = 20.dp, vertical = 14.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Header
+            // Header with App Title & Top Actions
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -131,33 +168,47 @@ fun HomeScreen(
                     )
                 }
 
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
-                    modifier = Modifier.padding(4.dp)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Logs Terminal Button
+                    IconButton(
+                        onClick = onNavigateToLogs,
+                        modifier = Modifier.testTag("top_logs_button")
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Security,
-                            contentDescription = "امنیت",
-                            modifier = Modifier.size(16.dp),
+                            imageVector = Icons.Default.Terminal,
+                            contentDescription = "لاگ‌های سیستم",
                             tint = MaterialTheme.colorScheme.primary
                         )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "رمزنگاری تونل",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                    }
+
+                    // Security Badge
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Security,
+                                contentDescription = "امنیت",
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "رمزنگاری تونل",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(28.dp))
 
             // Big Circular Connection Button
             Box(
@@ -174,21 +225,21 @@ fun HomeScreen(
                             .scale(pulseScale)
                             .border(
                                 width = 3.dp,
-                                color = if (isConnected) Color(0xFF10B981).copy(alpha = 0.35f) else Color(0xFF06B6D4).copy(alpha = 0.35f),
+                                color = if (isConnected) Color(0xFF10B981).copy(alpha = 0.45f) else Color(0xFF06B6D4).copy(alpha = 0.45f),
                                 shape = CircleShape
                             )
                     )
                 }
 
                 val buttonBg = when {
-                    isConnected -> Brush.verticalGradient(listOf(Color(0xFF059669), Color(0xFF047857)))
-                    isConnecting -> Brush.verticalGradient(listOf(Color(0xFF0891B2), Color(0xFF0E7490)))
-                    else -> Brush.verticalGradient(listOf(Color(0xFF334155), Color(0xFF1E293B)))
+                    isConnected -> Brush.verticalGradient(listOf(Color(0xFF00E676), Color(0xFF00897B)))
+                    isConnecting -> Brush.verticalGradient(listOf(Color(0xFF00BCD4), Color(0xFF0097A7)))
+                    else -> Brush.verticalGradient(listOf(Color(0xFF37474F), Color(0xFF212121)))
                 }
 
                 Surface(
                     shape = CircleShape,
-                    shadowElevation = 8.dp,
+                    shadowElevation = 10.dp,
                     modifier = Modifier
                         .size(150.dp)
                         .clip(CircleShape)
@@ -196,7 +247,9 @@ fun HomeScreen(
                             if (isConnected || isConnecting) {
                                 viewModel.disconnect()
                             } else {
-                                onConnectRequest()
+                                onConnectRequest {
+                                    viewModel.connectSmart()
+                                }
                             }
                         }
                         .testTag("main_connect_button")
@@ -243,15 +296,15 @@ fun HomeScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
-            // Status Text and Rationale
+            // Status Headline
             val statusText = when (val state = connectionState) {
-                is ConnectionState.Connected -> "متصل به: ${state.config.remarks}"
+                is ConnectionState.Connected -> "متصل به: ${state.title}"
                 is ConnectionState.Connecting -> state.step
                 is ConnectionState.Reconnecting -> state.reason
                 is ConnectionState.Error -> state.message
-                is ConnectionState.Disconnected -> "آماده اتصال به بهترین مسیر بین‌المللی"
+                is ConnectionState.Disconnected -> "آماده برقراری تونل امن اینترنت بین‌المللی"
             }
 
             Text(
@@ -259,7 +312,7 @@ fun HomeScreen(
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium,
                 color = when (connectionState) {
-                    is ConnectionState.Connected -> Color(0xFF10B981)
+                    is ConnectionState.Connected -> Color(0xFF00E676)
                     is ConnectionState.Connecting, is ConnectionState.Reconnecting -> Color(0xFF06B6D4)
                     is ConnectionState.Error -> Color(0xFFEF4444)
                     is ConnectionState.Disconnected -> MaterialTheme.colorScheme.onSurfaceVariant
@@ -268,9 +321,194 @@ fun HomeScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            // Fetch Progress Banner (if active)
+            // LIVE HIGH-TECH CONNECTION STATUS CARD (When Connected)
+            if (connectionState is ConnectionState.Connected) {
+                val state = connectionState as ConnectionState.Connected
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 16.dp),
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(0xFF0F2417) // Sleek emerald dark tint
+                    ),
+                    border = CardDefaults.outlinedCardBorder().copy(
+                        brush = Brush.horizontalGradient(listOf(Color(0xFF00E676), Color(0xFF00897B)))
+                    )
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        // Row 1: Country Flag, Name, City & Target Badge
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(state.countryFlag, fontSize = 24.sp)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Column {
+                                    Text(
+                                        text = state.countryName + if (state.locationCity.isNotBlank()) " (${state.locationCity})" else "",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 15.sp,
+                                        color = Color.White
+                                    )
+                                    Text(
+                                        text = "${state.host}:${state.port}",
+                                        fontSize = 12.sp,
+                                        color = Color(0xFF81C784),
+                                        fontFamily = FontFamily.Monospace
+                                    )
+                                }
+                            }
+
+                            Surface(
+                                color = Color(0xFF00E676).copy(alpha = 0.2f),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text(
+                                    text = state.protocolOrType,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF00E676),
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        // Row 2: Live Download & Upload Speed Gauges
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            // Download Speed Box
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(Color(0xFF1B3B25))
+                                    .padding(10.dp)
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.ArrowDownward,
+                                        contentDescription = null,
+                                        tint = Color(0xFF00E676),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Column {
+                                        Text(
+                                            text = formatSpeed(state.downloadSpeedBps),
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 14.sp,
+                                            color = Color.White,
+                                            fontFamily = FontFamily.Monospace
+                                        )
+                                        Text(
+                                            text = "دریافت: ${formatBytes(state.bytesIn)}",
+                                            fontSize = 10.sp,
+                                            color = Color(0xFFA5D6A7)
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Upload Speed Box
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(Color(0xFF1B3B25))
+                                    .padding(10.dp)
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.ArrowUpward,
+                                        contentDescription = null,
+                                        tint = Color(0xFF29B6F6),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Column {
+                                        Text(
+                                            text = formatSpeed(state.uploadSpeedBps),
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 14.sp,
+                                            color = Color.White,
+                                            fontFamily = FontFamily.Monospace
+                                        )
+                                        Text(
+                                            text = "ارسال: ${formatBytes(state.bytesOut)}",
+                                            fontSize = 10.sp,
+                                            color = Color(0xFF81D4FA)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Row 3: Duration Timer & Ping Latency
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Timer, contentDescription = null, tint = Color(0xFFB0BEC5), modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "مدت: ${formatDuration(durationSeconds)}",
+                                    fontSize = 11.sp,
+                                    color = Color(0xFFCFD8DC),
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
+
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                PingBadge(state.pingMs)
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        // Row 4: Quick Actions on Active Connection
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Button(
+                                onClick = { showShareQrDialog = true },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32))
+                            ) {
+                                Icon(Icons.Default.QrCode2, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("کد QR و اشتراک", fontSize = 11.sp)
+                            }
+
+                            OutlinedButton(
+                                onClick = onNavigateToLogs,
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Icon(Icons.Default.Terminal, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("لاگ زنده", fontSize = 11.sp)
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Fetch Progress Banner (Configs)
             AnimatedVisibility(visible = fetchProgress.isRunning) {
                 Card(
                     modifier = Modifier
@@ -283,16 +521,8 @@ fun HomeScreen(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text(
-                                text = "در حال دریافت کانفیگ‌ها...",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 13.sp
-                            )
-                            Text(
-                                text = "${fetchProgress.completedSources} از ${fetchProgress.totalSources} منبع",
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.primary
-                            )
+                            Text(text = "در حال دریافت کانفیگ‌ها...", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            Text(text = "${fetchProgress.completedSources} از ${fetchProgress.totalSources} منبع", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
                         }
                         Spacer(modifier = Modifier.height(8.dp))
                         LinearProgressIndicator(
@@ -315,7 +545,7 @@ fun HomeScreen(
                 }
             }
 
-            // Proxy Fetch Progress Banner (if active)
+            // Proxy Fetch Progress Banner
             AnimatedVisibility(visible = proxyFetchProgress.isRunning) {
                 Card(
                     modifier = Modifier
@@ -328,16 +558,8 @@ fun HomeScreen(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text(
-                                text = "در حال جمع‌آوری پروکسی‌ها...",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 13.sp
-                            )
-                            Text(
-                                text = "${proxyFetchProgress.totalFound} پروکسی",
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.primary
-                            )
+                            Text(text = "در حال جمع‌آوری پروکسی‌ها...", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            Text(text = "${proxyFetchProgress.totalFound} پروکسی", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
                         }
                         Spacer(modifier = Modifier.height(8.dp))
                         LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
@@ -353,94 +575,60 @@ fun HomeScreen(
                 }
             }
 
-            // Quick Actions Row: Smart Connect, Fetch Configs, Fetch Proxies
+            // Quick Actions: Fetch Configs, Fetch Proxies, Delete Failed Both
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Button(
-                    onClick = { onConnectRequest() },
-                    modifier = Modifier
-                        .weight(1f)
-                        .testTag("quick_smart_select_button"),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                    shape = RoundedCornerShape(10.dp)
-                ) {
-                    Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(14.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("انتخاب خودکار", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                }
-
-                OutlinedButton(
                     onClick = { viewModel.fetchAllSources() },
+                    enabled = !fetchProgress.isRunning,
+                    shape = RoundedCornerShape(12.dp),
                     modifier = Modifier
                         .weight(1f)
-                        .testTag("quick_fetch_configs_button"),
-                    shape = RoundedCornerShape(10.dp)
+                        .testTag("home_fetch_configs_button")
                 ) {
-                    Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("دریافت کانفیگ", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Text("دریافت کانفیگ", fontSize = 11.sp)
+                }
+
+                Button(
+                    onClick = { viewModel.fetchAllProxies() },
+                    enabled = !proxyFetchProgress.isRunning,
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("home_fetch_proxies_button")
+                ) {
+                    Icon(Icons.Default.VpnLock, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("جمع‌آوری پروکسی", fontSize = 11.sp)
                 }
 
                 OutlinedButton(
-                    onClick = { viewModel.fetchAllProxies() },
-                    modifier = Modifier
-                        .weight(1f)
-                        .testTag("quick_fetch_proxies_button"),
-                    shape = RoundedCornerShape(10.dp)
+                    onClick = {
+                        viewModel.deleteFailedConfigsAndProxies { cfgDeleted, prxDeleted ->
+                            Toast.makeText(
+                                context,
+                                "$cfgDeleted کانفیگ و $prxDeleted پروکسی نامعتبر حذف شدند",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    },
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.testTag("home_clean_all_failed_button")
                 ) {
-                    Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Icon(Icons.Default.DeleteSweep, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color(0xFFEF4444))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("جمع‌آوری پروکسی", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Text("حذف نامعتبرها", fontSize = 10.sp, color = Color(0xFFEF4444))
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            // Active Connection Detail Card (if connected)
-            if (connectionState is ConnectionState.Connected) {
-                val active = (connectionState as ConnectionState.Connected).config
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "مشخصات مسیر فعال",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp
-                            )
-                            ProtocolBadge(active.protocol)
-                        }
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column {
-                                Text("سرور: ${active.server}:${active.port}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text("امنیت: ${active.security} (${active.network})", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                            Column(horizontalAlignment = Alignment.End) {
-                                PingBadge(active.pingMs)
-                                Text("امتیاز: ${active.qualityScore}/100", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.primary)
-                            }
-                        }
-                    }
-                }
-                Spacer(modifier = Modifier.height(20.dp))
-            }
-
-            // Stats Row
+            // Stats Row: Total Configs, Healthy, Total Proxies
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -463,10 +651,10 @@ fun HomeScreen(
                         .clickable { onNavigateToConfigs() }
                 )
                 StatCard(
-                    title = "تست‌نشده",
-                    value = "$untestedConfigs",
-                    icon = Icons.Default.CloudDownload,
-                    tint = Color(0xFF64748B),
+                    title = "کل پروکسی‌ها",
+                    value = "$totalProxies",
+                    icon = Icons.Default.VpnLock,
+                    tint = Color(0xFF00BCD4),
                     modifier = Modifier
                         .weight(1f)
                         .clickable { onNavigateToConfigs() }
@@ -511,92 +699,111 @@ fun HomeScreen(
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(text = "⚡", fontSize = 16.sp)
+                        Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = Color(0xFFF59E0B), modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
                         Column {
                             Text(text = "ترافیک نیم‌بها", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFF59E0B))
-                            Text(text = "$halfPriceConfigs سرور داخلی/CDN", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(text = "$halfPriceConfigs سرور داخلی", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
-            // Navigation Shortcut Banner for Diagnostics
-            Surface(
-                shape = RoundedCornerShape(14.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onNavigateToDiagnostics() }
+            // Navigation Shortcuts Row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Row(
-                    modifier = Modifier.padding(14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                OutlinedButton(
+                    onClick = onNavigateToConfigs,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.weight(1f)
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "عیب‌یابی پیشرفته شبکه و اختلالات",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp
-                        )
-                        Text(
-                            text = "بررسی تفکیک اختلال DNS، پرتال کپتیو و دسترسی بین‌المللی",
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Button(
-                        onClick = { onNavigateToDiagnostics() },
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
-                    ) {
-                        Text("بررسی", fontSize = 11.sp)
-                    }
+                    Text("مدیریت کانفیگ‌ها", fontSize = 11.sp)
+                }
+
+                OutlinedButton(
+                    onClick = onNavigateToSources,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("مدیریت منابع", fontSize = 11.sp)
+                }
+
+                OutlinedButton(
+                    onClick = onNavigateToDiagnostics,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("عیب‌یابی شبکه", fontSize = 11.sp)
                 }
             }
+        }
+
+        // Active Connection Share QR Modal
+        if (showShareQrDialog && connectionState is ConnectionState.Connected) {
+            val state = connectionState as ConnectionState.Connected
+            ShareQrDialog(
+                title = state.title,
+                subtitle = "${state.protocolOrType} • ${state.host}:${state.port}",
+                contentToShare = state.rawUriOrShareable,
+                onDismiss = { showShareQrDialog = false }
+            )
         }
     }
 }
 
 @Composable
-fun StatCard(
+private fun StatCard(
     title: String,
     value: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
-    tint: Color = MaterialTheme.colorScheme.primary,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    tint: Color = MaterialTheme.colorScheme.primary
 ) {
     Surface(
-        shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
         modifier = modifier
     ) {
         Column(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.padding(10.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = tint,
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(
-                text = value,
-                fontWeight = FontWeight.Bold,
-                fontSize = 18.sp,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = title,
-                fontSize = 10.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
+            Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp))
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(text = value, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            Text(text = title, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
         }
+    }
+}
+
+private fun formatBytes(bytes: Long): String {
+    return when {
+        bytes >= 1024 * 1024 * 1024 -> String.format(Locale.US, "%.2f GB", bytes.toDouble() / (1024 * 1024 * 1024))
+        bytes >= 1024 * 1024 -> String.format(Locale.US, "%.1f MB", bytes.toDouble() / (1024 * 1024))
+        bytes >= 1024 -> String.format(Locale.US, "%.0f KB", bytes.toDouble() / 1024)
+        else -> "$bytes B"
+    }
+}
+
+private fun formatSpeed(bps: Long): String {
+    return when {
+        bps >= 1024 * 1024 -> String.format(Locale.US, "%.1f MB/s", bps.toDouble() / (1024 * 1024))
+        bps >= 1024 -> String.format(Locale.US, "%.0f KB/s", bps.toDouble() / 1024)
+        else -> "$bps B/s"
+    }
+}
+
+private fun formatDuration(seconds: Long): String {
+    val hrs = seconds / 3600
+    val mins = (seconds % 3600) / 60
+    val secs = seconds % 60
+    return if (hrs > 0) {
+        String.format(Locale.US, "%02d:%02d:%02d", hrs, mins, secs)
+    } else {
+        String.format(Locale.US, "%02d:%02d", mins, secs)
     }
 }

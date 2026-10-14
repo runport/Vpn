@@ -180,8 +180,14 @@ class MainViewModel : ViewModel() {
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val systemLogs: StateFlow<List<com.example.diagnostics.LogItem>> = com.example.diagnostics.AppLogger.logsFlow
+
     fun connect(config: ConfigItem) {
         connectionManager.connect(config)
+    }
+
+    fun connectProxy(proxy: ProxyItem) {
+        connectionManager.connectProxy(proxy)
     }
 
     fun connectSmart() {
@@ -330,6 +336,21 @@ class MainViewModel : ViewModel() {
             val count = repository.deleteFailedProxies()
             onDone(count)
         }
+    }
+
+    fun deleteFailedConfigsAndProxies(onDone: (Int, Int) -> Unit = { _, _ -> }) {
+        viewModelScope.launch {
+            val (cfgCount, prxCount) = repository.deleteFailedConfigsAndProxies()
+            onDone(cfgCount, prxCount)
+        }
+    }
+
+    fun clearLogs() {
+        com.example.diagnostics.AppLogger.clear()
+    }
+
+    fun exportLogs(): String {
+        return com.example.diagnostics.AppLogger.exportAsText()
     }
 
     fun restoreDefaultSources() {

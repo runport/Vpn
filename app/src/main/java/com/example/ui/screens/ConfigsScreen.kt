@@ -5,6 +5,15 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,20 +29,25 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -56,6 +70,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -64,11 +80,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.core.model.ConfigItem
+import com.example.core.model.ConnectionState
 import com.example.core.model.ProxyProtocol
 import com.example.ui.components.ImportConfigDialog
 import com.example.ui.components.PingBadge
 import com.example.ui.components.ProtocolBadge
 import com.example.ui.components.RtlProvider
+import com.example.ui.components.ShareQrDialog
 import com.example.ui.components.StatusBadge
 import com.example.ui.viewmodel.ConfigSortOption
 import com.example.ui.viewmodel.MainViewModel
@@ -76,9 +94,11 @@ import com.example.ui.viewmodel.MainViewModel
 @Composable
 fun ConfigsScreen(
     viewModel: MainViewModel,
+    onRequestConnect: (action: () -> Unit) -> Unit = { it() },
     modifier: Modifier = Modifier
 ) {
     val configs by viewModel.filteredConfigs.collectAsState()
+    val connectionState by viewModel.connectionState.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     val selectedProtocol by viewModel.selectedProtocol.collectAsState()
     val selectedCountry by viewModel.selectedCountry.collectAsState()
@@ -89,10 +109,14 @@ fun ConfigsScreen(
     val testProgress by viewModel.testProgress.collectAsState()
     val countryDistribution by viewModel.countryDistribution.collectAsState()
     val showMapView by viewModel.showMapView.collectAsState()
+    val fetchProgress by viewModel.fetchProgress.collectAsState()
 
     var showImportDialog by remember { mutableStateOf(false) }
+    var shareQrConfig by remember { mutableStateOf<ConfigItem?>(null) }
 
     val context = LocalContext.current
+
+    val connectedConfigId = (connectionState as? ConnectionState.Connected)?.config?.id
 
     RtlProvider {
         Column(
@@ -139,7 +163,7 @@ fun ConfigsScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Action Buttons: Fetch Configs, Test All, Map, Delete Failed
+            // Action Buttons: Collect, Test Batch, Map, Delete Failed
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -147,132 +171,126 @@ fun ConfigsScreen(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                // Fetch All Configs button
                 Button(
                     onClick = { viewModel.fetchAllSources() },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
+                    enabled = !fetchProgress.isRunning,
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                     shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.testTag("configs_fetch_button")
+                    modifier = Modifier.testTag("collect_configs_button")
                 ) {
-                    Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(16.dp))
+                    if (fetchProgress.isRunning) {
+                        CircularProgressIndicator(modifier = Modifier.size(14.dp), color = Color.White, strokeWidth = 2.dp)
+                    } else {
+                        Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(16.dp))
+                    }
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("دریافت کانفیگ‌ها", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        if (fetchProgress.isRunning) "در حال دریافت..." else "دریافت کانفیگ‌ها",
+                        fontSize = 11.sp
+                    )
                 }
 
+                // Batch Test button
                 Button(
                     onClick = { viewModel.testAllConfigs() },
-                    enabled = !isTestingAll && configs.isNotEmpty(),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                    enabled = !isTestingAll,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0288D1)),
                     shape = RoundedCornerShape(8.dp),
                     modifier = Modifier.testTag("test_all_configs_button")
                 ) {
                     if (isTestingAll) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(14.dp),
-                            color = Color.White,
-                            strokeWidth = 2.dp
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("تست (${testProgress.first}/${testProgress.second})", fontSize = 11.sp)
+                        CircularProgressIndicator(modifier = Modifier.size(14.dp), color = Color.White, strokeWidth = 2.dp)
                     } else {
                         Icon(Icons.Default.Speed, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("تست سریع همه", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        if (isTestingAll) "در حال تست..." else "تست سرعتی همه",
+                        fontSize = 11.sp
+                    )
                 }
 
+                // Toggle Map button
                 OutlinedButton(
                     onClick = { viewModel.showMapView.value = !showMapView },
                     shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.testTag("toggle_map_button")
+                    colors = if (showMapView) ButtonDefaults.outlinedButtonColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)) else ButtonDefaults.outlinedButtonColors()
                 ) {
                     Icon(Icons.Default.Map, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text(if (showMapView) "بستن نقشه" else "🗺️ نمایش نقشه", fontSize = 11.sp)
+                    Text(if (showMapView) "پنهان‌سازی نقشه" else "نمایش روی نقشه", fontSize = 11.sp)
                 }
 
+                // Delete Failed Configs Button
                 OutlinedButton(
                     onClick = {
                         viewModel.deleteFailedConfigs { count ->
-                            Toast.makeText(context, "$count کانفیگ ناموفق و خراب حذف شدند", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "$count کانفیگ نامعتبر حذف شد", Toast.LENGTH_SHORT).show()
                         }
                     },
-                    shape = RoundedCornerShape(8.dp)
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.testTag("delete_failed_configs_button")
                 ) {
-                    Icon(Icons.Default.Delete, contentDescription = null, tint = Color(0xFFEF4444), modifier = Modifier.size(16.dp))
+                    Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color(0xFFEF4444))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("حذف ناموفق‌ها", fontSize = 11.sp, color = Color(0xFFEF4444))
+                    Text("حذف نامعتبرها", fontSize = 11.sp, color = Color(0xFFEF4444))
+                }
+
+                // Delete Failed BOTH Configs & Proxies
+                OutlinedButton(
+                    onClick = {
+                        viewModel.deleteFailedConfigsAndProxies { cfgCount, prxCount ->
+                            Toast.makeText(
+                                context,
+                                "$cfgCount کانفیگ و $prxCount پروکسی نامعتبر حذف شدند",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    },
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.testTag("delete_all_failed_both_button")
+                ) {
+                    Icon(Icons.Default.DeleteSweep, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color(0xFFC62828))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("حذف یکجای همه نامعتبرها", fontSize = 10.sp, color = Color(0xFFC62828))
                 }
             }
 
-            if (isTestingAll) {
-                Spacer(modifier = Modifier.height(6.dp))
-                LinearProgressIndicator(
-                    progress = {
-                        if (testProgress.second > 0) testProgress.first.toFloat() / testProgress.second.toFloat() else 0f
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                )
+            // Testing Progress Bar
+            AnimatedVisibility(visible = isTestingAll) {
+                Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                    val current = testProgress.first
+                    val total = testProgress.second
+                    val fraction = if (total > 0) current.toFloat() / total.toFloat() else 0f
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("پیشرفت تست با سرعت بالا:", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
+                        Text("$current از $total", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    LinearProgressIndicator(progress = { fraction }, modifier = Modifier.fillMaxWidth())
+                }
             }
 
-            // Interactive World Map Component (Collapsible)
+            // Interactive Global Map
             AnimatedVisibility(visible = showMapView) {
-                Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                    GlobalMapView(
-                        countries = countryDistribution,
-                        selectedCountry = selectedCountry,
-                        onCountrySelected = { code -> viewModel.selectedCountry.value = code },
-                        onCloseMap = { viewModel.showMapView.value = false }
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            // Special Filters: Bypass National Net & Half-Price
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                FilterChip(
-                    selected = onlyBypass,
-                    onClick = { viewModel.filterOnlyBypassNationalNet.value = !onlyBypass },
-                    leadingIcon = {
-                        Icon(Icons.Default.Security, contentDescription = null, tint = Color(0xFF10B981), modifier = Modifier.size(16.dp))
+                GlobalMapView(
+                    countries = countryDistribution,
+                    selectedCountry = selectedCountry,
+                    onCountrySelected = { code ->
+                        viewModel.selectedCountry.value = if (selectedCountry == code) null else code
                     },
-                    label = { Text("🛡️ عبور از نت ملی", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                    onCloseMap = { viewModel.showMapView.value = false },
+                    modifier = Modifier.padding(vertical = 8.dp)
                 )
-
-                FilterChip(
-                    selected = onlyHalfPrice,
-                    onClick = { viewModel.filterOnlyHalfPrice.value = !onlyHalfPrice },
-                    leadingIcon = {
-                        Icon(Icons.Default.Bolt, contentDescription = null, tint = Color(0xFFF59E0B), modifier = Modifier.size(16.dp))
-                    },
-                    label = { Text("⚡ ترافیک نیم‌بها", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
-                )
-
-                FilterChip(
-                    selected = selectedCountry == null,
-                    onClick = { viewModel.selectedCountry.value = null },
-                    label = { Text("همه کشورها", fontSize = 11.sp) }
-                )
-
-                countryDistribution.take(7).forEach { c ->
-                    FilterChip(
-                        selected = selectedCountry == c.countryCode,
-                        onClick = {
-                            viewModel.selectedCountry.value = if (selectedCountry == c.countryCode) null else c.countryCode
-                        },
-                        label = { Text("${c.flag} ${c.countryName}", fontSize = 11.sp) }
-                    )
-                }
             }
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            // Protocol & Sort Chips
+            // Protocol & Filter Chips
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -282,9 +300,9 @@ fun ConfigsScreen(
                 FilterChip(
                     selected = selectedProtocol == null,
                     onClick = { viewModel.selectedProtocol.value = null },
-                    label = { Text("همه پروتکل‌ها", fontSize = 11.sp) }
+                    label = { Text("همه پروتکل‌ها (${configs.size})", fontSize = 11.sp) }
                 )
-                ProxyProtocol.entries.forEach { proto ->
+                ProxyProtocol.values().forEach { proto ->
                     FilterChip(
                         selected = selectedProtocol == proto,
                         onClick = {
@@ -293,8 +311,52 @@ fun ConfigsScreen(
                         label = { Text(proto.displayName, fontSize = 11.sp) }
                     )
                 }
+            }
 
-                ConfigSortOption.entries.forEach { sort ->
+            // Bypass & Half-Price and Country Chips
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                FilterChip(
+                    selected = onlyBypass,
+                    onClick = { viewModel.filterOnlyBypassNationalNet.value = !onlyBypass },
+                    label = { Text("🛡️ عبور از نت ملی", fontSize = 11.sp) }
+                )
+                FilterChip(
+                    selected = onlyHalfPrice,
+                    onClick = { viewModel.filterOnlyHalfPrice.value = !onlyHalfPrice },
+                    label = { Text("⚡ نیم‌بها", fontSize = 11.sp) }
+                )
+
+                if (selectedCountry != null) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.clickable { viewModel.selectedCountry.value = null }
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text("فیلتر کشور: $selectedCountry ✕", fontSize = 11.sp, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                        }
+                    }
+                }
+            }
+
+            // Sort Options
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                ConfigSortOption.values().forEach { sort ->
                     FilterChip(
                         selected = sortOption == sort,
                         onClick = { viewModel.sortOption.value = sort },
@@ -319,7 +381,7 @@ fun ConfigsScreen(
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "فیلترها را ریست کنید یا از دکمه «+ افزودن» کانفیگ جدید وارد کنید.",
+                            text = "فیلترها را ریست کنید یا از دکمه «دریافت کانفیگ‌ها» یا «+ افزودن» استفاده کنید.",
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -331,16 +393,27 @@ fun ConfigsScreen(
                     modifier = Modifier.fillMaxSize()
                 ) {
                     items(configs, key = { it.id }) { item ->
+                        val isItemConnected = connectedConfigId == item.id
                         ConfigListItemEnhanced(
                             config = item,
-                            onConnect = { viewModel.connect(item) },
+                            isConnected = isItemConnected,
+                            onConnect = {
+                                if (isItemConnected) {
+                                    viewModel.disconnect()
+                                } else {
+                                    onRequestConnect {
+                                        viewModel.connect(item)
+                                    }
+                                }
+                            },
                             onTest = { viewModel.testSingleConfig(item) },
                             onDelete = { viewModel.deleteConfig(item) },
+                            onShareQr = { shareQrConfig = item },
                             onCopy = {
                                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                 val clip = ClipData.newPlainText("Config Link", item.rawUri)
                                 clipboard.setPrimaryClip(clip)
-                                Toast.makeText(context, "لینک کانفیگ کپی شد", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "لینک کانفیگ با موفقیت کپی شد", Toast.LENGTH_SHORT).show()
                             }
                         )
                     }
@@ -353,9 +426,20 @@ fun ConfigsScreen(
             ImportConfigDialog(
                 onDismiss = { showImportDialog = false },
                 onImportText = { text ->
-                    val count = viewModel.importFromRawText(text)
-                    Toast.makeText(context, "در حال پردازش و استخراج کانفیگ‌ها...", Toast.LENGTH_SHORT).show()
+                    viewModel.importFromRawText(text)
+                    Toast.makeText(context, "در حال استخراج و ذخیره کانفیگ‌ها...", Toast.LENGTH_SHORT).show()
                 }
+            )
+        }
+
+        // Share QR Dialog
+        if (shareQrConfig != null) {
+            val item = shareQrConfig!!
+            ShareQrDialog(
+                title = item.remarks,
+                subtitle = "${item.protocol.displayName} • ${item.server}:${item.port} • ${item.countryFlag} ${item.countryName}",
+                contentToShare = item.rawUri,
+                onDismiss = { shareQrConfig = null }
             )
         }
     }
@@ -364,20 +448,78 @@ fun ConfigsScreen(
 @Composable
 fun ConfigListItemEnhanced(
     config: ConfigItem,
+    isConnected: Boolean,
     onConnect: () -> Unit,
     onTest: () -> Unit,
     onDelete: () -> Unit,
+    onShareQr: () -> Unit,
     onCopy: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val infiniteTransition = rememberInfiniteTransition(label = "greenPulse")
+    val pulseAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.5f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulseAlpha"
+    )
+
     Card(
         modifier = modifier
             .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .clickable { onConnect() }
             .testTag("config_item_${config.id}"),
         shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+        colors = CardDefaults.cardColors(
+            containerColor = if (isConnected) Color(0xFF0D2E1A) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        ),
+        border = if (isConnected) BorderStroke(2.dp, Color(0xFF00E676)) else null
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
+            // Connected Active Banner (Visible when this config is connected)
+            if (isConnected) {
+                Surface(
+                    color = Color(0xFF00E676).copy(alpha = 0.25f),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(10.dp)
+                                    .scale(pulseAlpha)
+                                    .background(Color(0xFF00E676), CircleShape)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "کانفیگ متصل و فعال",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF00E676)
+                            )
+                        }
+
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            tint = Color(0xFF00E676),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+
             // Header Row: Remarks & Badges
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -388,12 +530,13 @@ fun ConfigListItemEnhanced(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text(config.countryFlag, fontSize = 16.sp)
+                    Text(config.countryFlag, fontSize = 18.sp)
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = config.remarks,
                         fontWeight = FontWeight.Bold,
                         fontSize = 13.sp,
+                        color = if (isConnected) Color.White else MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -412,14 +555,14 @@ fun ConfigListItemEnhanced(
                 Text(
                     text = "${config.server}:${config.port}",
                     fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = if (isConnected) Color(0xFFA5D6A7) else MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = config.countryName,
                     fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = if (isConnected) Color(0xFFA5D6A7) else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
@@ -433,7 +576,7 @@ fun ConfigListItemEnhanced(
                 ) {
                     if (config.isBypassNationalNet) {
                         Surface(
-                            color = Color(0xFF059669).copy(alpha = 0.15f),
+                            color = Color(0xFF059669).copy(alpha = 0.18f),
                             shape = RoundedCornerShape(6.dp)
                         ) {
                             Text(
@@ -448,7 +591,7 @@ fun ConfigListItemEnhanced(
 
                     if (config.isHalfPriceDomestic) {
                         Surface(
-                            color = Color(0xFFD97706).copy(alpha = 0.15f),
+                            color = Color(0xFFD97706).copy(alpha = 0.18f),
                             shape = RoundedCornerShape(6.dp)
                         ) {
                             Text(
@@ -478,7 +621,7 @@ fun ConfigListItemEnhanced(
                             text = "${config.qualityScore}/100",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
+                            color = if (isConnected) Color(0xFF00E676) else MaterialTheme.colorScheme.primary
                         )
                     }
                 }
@@ -495,15 +638,30 @@ fun ConfigListItemEnhanced(
                 Button(
                     onClick = onConnect,
                     shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                    colors = if (isConnected) {
+                        ButtonDefaults.buttonColors(containerColor = Color(0xFFC62828))
+                    } else {
+                        ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    },
                     modifier = Modifier.height(36.dp)
                 ) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Icon(
+                        imageVector = if (isConnected) Icons.Default.Stop else Icons.Default.PlayArrow,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("اتصال", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        if (isConnected) "قطع اتصال" else "اتصال",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
 
                 Row {
+                    IconButton(onClick = onShareQr, modifier = Modifier.size(36.dp)) {
+                        Icon(Icons.Default.QrCode2, contentDescription = "کد QR و اشتراک", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                    }
                     IconButton(onClick = onTest, modifier = Modifier.size(36.dp)) {
                         Icon(Icons.Default.Refresh, contentDescription = "تست سرور", modifier = Modifier.size(18.dp))
                     }

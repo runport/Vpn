@@ -4,13 +4,33 @@ sealed class ConnectionState {
     object Disconnected : ConnectionState()
     data class Connecting(val configRemarks: String, val step: String) : ConnectionState()
     data class Connected(
-        val config: ConfigItem,
-        val connectedAt: Long,
-        val externalAccessVerified: Boolean,
-        val pingMs: Long,
+        val config: ConfigItem? = null,
+        val proxy: ProxyItem? = null,
+        val connectedAt: Long = System.currentTimeMillis(),
+        val externalAccessVerified: Boolean = true,
+        val pingMs: Long = 0,
         val bytesIn: Long = 0,
-        val bytesOut: Long = 0
-    ) : ConnectionState()
+        val bytesOut: Long = 0,
+        val downloadSpeedBps: Long = 0,
+        val uploadSpeedBps: Long = 0
+    ) : ConnectionState() {
+        val title: String get() = proxy?.let { "${it.type.displayName} - ${it.host}:${it.port}" } ?: config?.remarks ?: "اتصال فعال"
+        val countryName: String get() = proxy?.countryName ?: config?.countryName ?: "نامشخص"
+        val countryFlag: String get() = proxy?.countryFlag ?: config?.countryFlag ?: "🌐"
+        val countryCode: String get() = proxy?.countryCode ?: config?.countryCode ?: "XX"
+        val locationCity: String get() = proxy?.locationCity ?: ""
+        val host: String get() = proxy?.host ?: config?.server ?: ""
+        val port: Int get() = proxy?.port ?: config?.port ?: 0
+        val protocolOrType: String get() = proxy?.type?.displayName ?: config?.protocol?.displayName ?: "VPN"
+        val isProxy: Boolean get() = proxy != null
+        val rawUriOrShareable: String get() = config?.rawUri ?: (proxy?.let { 
+            if (it.type == ProxyType.MTPROTO) {
+                "tg://proxy?server=${it.host}&port=${it.port}&secret=${it.secretOrAuth ?: ""}"
+            } else {
+                "${it.type.name.lowercase()}://${it.host}:${it.port}"
+            }
+        } ?: "")
+    }
     data class Reconnecting(val attempts: Int, val reason: String) : ConnectionState()
     data class Error(val message: String, val canAutoRecover: Boolean = true) : ConnectionState()
 }
