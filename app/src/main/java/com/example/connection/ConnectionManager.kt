@@ -111,8 +111,9 @@ class ConnectionManager(
             AppLogger.i("CONN", "درخواست اتصال به کانفیگ: ${config.remarks} [${config.server}:${config.port}]")
             _connectionState.value = ConnectionState.Connecting(config.remarks, "در حال بررسی دسترسی به سرور...")
 
-            // Test endpoint reachability before launching VPN
-            val testResult = tester.testConfig(config)
+            // Test endpoint reachability with user-selected test mode before launching VPN
+            val settings = com.example.AzadiYarApp.instance.v2raySettingsManager.getSettings()
+            val testResult = tester.testConfig(config, testMode = settings.testMode, testUrl = settings.realDelayTestUrl)
             if (testResult.status == com.example.core.model.TestStatus.FAILED) {
                 AppLogger.w("CONN", "سرور انتخابی پاسخ نداد: ${testResult.errorMessage}")
                 if (autoRecoveryEnabled) {

@@ -39,10 +39,14 @@ class AzadiYarApp : Application() {
     lateinit var proxyManager: ProxyManager
         private set
 
+    lateinit var v2raySettingsManager: com.example.config.settings.V2raySettingsManager
+        private set
+
     override fun onCreate() {
         super.onCreate()
         instance = this
 
+        v2raySettingsManager = com.example.config.settings.V2raySettingsManager(this)
         database = AzadiDatabase.getInstance(this)
         repository = AzadiRepository(database)
         configSourceManager = ConfigSourceManager(repository)

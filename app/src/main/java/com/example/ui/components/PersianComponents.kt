@@ -102,20 +102,38 @@ fun ProtocolBadge(protocol: ProxyProtocol, modifier: Modifier = Modifier) {
 
 @Composable
 fun PingBadge(pingMs: Long, modifier: Modifier = Modifier) {
+    if (pingMs == -1L) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = modifier) {
+            Box(
+                modifier = Modifier
+                    .size(6.dp)
+                    .background(Color(0xFFEF4444), CircleShape)
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = "-1 ms (نامعتبر)",
+                color = Color(0xFFEF4444),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+        return
+    }
+
     if (pingMs <= 0) {
         Text(
-            text = "-- ms",
+            text = "تست نشده",
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-            fontSize = 12.sp,
+            fontSize = 11.sp,
             modifier = modifier
         )
         return
     }
 
     val color = when {
-        pingMs <= 180 -> Color(0xFF10B981)
-        pingMs <= 400 -> Color(0xFFF59E0B)
-        else -> Color(0xFFEF4444)
+        pingMs <= 250 -> Color(0xFF10B981) // Green
+        pingMs <= 500 -> Color(0xFFF59E0B) // Amber
+        else -> Color(0xFFFF9800) // Orange
     }
 
     Row(verticalAlignment = Alignment.CenterVertically, modifier = modifier) {

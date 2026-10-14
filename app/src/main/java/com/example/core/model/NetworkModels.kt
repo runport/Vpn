@@ -81,3 +81,48 @@ data class BridgeConfig(
     val fragmentIntervalMs: Int = 10,
     val isEnabled: Boolean = false
 )
+
+enum class RoutingMode(val titlePersian: String, val descPersian: String) {
+    BYPASS_IRAN_LAN("دور زدن سایت‌های ایرانی و محلی (Bypass Iran & LAN)", "ترافیک داخلی و بانک‌ها بدون فیلترشکن و پرسرعت باز می‌شوند"),
+    GLOBAL("مسیریابی سراسری (Global)", "تمام ترافیک دستگاه بدون استثنا از تونل امن عبور می‌کند"),
+    PROXY_ONLY("فقط سایت‌های فیلتر شده (Proxy Only)", "سایت‌های تحریم‌شده و فیلترشده از تونل عبور می‌کنند")
+}
+
+enum class TestMode(val titlePersian: String, val descPersian: String) {
+    REAL_DELAY("تست تاخیر واقعی (Real Delay)", "تست ارسال درخواست به generate_204 و بررسی رمزنگاری پروتکل"),
+    TCPING("تست اتصال پورت (TCPing)", "بررسی باز بودن پورت TCP سرور")
+}
+
+data class AppPackageInfo(
+    val packageName: String,
+    val appName: String,
+    val isSystem: Boolean = false
+)
+
+data class V2raySettings(
+    // 1. Routing & Apps
+    val routingMode: RoutingMode = RoutingMode.BYPASS_IRAN_LAN,
+    val perAppProxyEnabled: Boolean = false,
+    val perAppProxyBypassMode: Boolean = false, // false = only selected apps use VPN; true = selected apps bypass VPN
+    val selectedApps: Set<String> = emptySet(),
+
+    // 2. Testing & Automation
+    val testMode: TestMode = TestMode.REAL_DELAY,
+    val realDelayTestUrl: String = "https://www.gstatic.com/generate_204",
+    val autoDeleteInvalidAfterTest: Boolean = true,
+    val autoSortAfterTest: Boolean = true,
+
+    // 3. DNS Configuration
+    val remoteDns: String = "1.1.1.1",
+    val domesticDns: String = "223.5.5.5",
+    val enableFakeDns: Boolean = true,
+
+    // 4. Tunnel & Network
+    val mtu: Int = 1400,
+    val enableUdp: Boolean = true,
+    val allowLanSharing: Boolean = false,
+    val localSocksPort: Int = 10808,
+    val localHttpPort: Int = 10809,
+    val autoReconnect: Boolean = true
+)
+

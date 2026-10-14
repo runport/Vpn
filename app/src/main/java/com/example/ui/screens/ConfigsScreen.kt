@@ -191,9 +191,9 @@ fun ConfigsScreen(
                     )
                 }
 
-                // Batch Test button
+                // Batch Real Delay Test button (Primary v2rayNG accurate test)
                 Button(
-                    onClick = { viewModel.testAllConfigs() },
+                    onClick = { viewModel.testAllConfigs(com.example.core.model.TestMode.REAL_DELAY) },
                     enabled = !isTestingAll,
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0288D1)),
                     shape = RoundedCornerShape(8.dp),
@@ -206,9 +206,21 @@ fun ConfigsScreen(
                     }
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        if (isTestingAll) "در حال تست..." else "تست سرعتی همه",
+                        if (isTestingAll) "در حال تست تاخیر..." else "تست تاخیر واقعی همه",
                         fontSize = 11.sp
                     )
+                }
+
+                // Batch TCPing Test button
+                OutlinedButton(
+                    onClick = { viewModel.testAllConfigs(com.example.core.model.TestMode.TCPING) },
+                    enabled = !isTestingAll,
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.testTag("test_tcp_button")
+                ) {
+                    Icon(Icons.Default.Bolt, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color(0xFFF59E0B))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("تست TCP", fontSize = 11.sp)
                 }
 
                 // Toggle Map button

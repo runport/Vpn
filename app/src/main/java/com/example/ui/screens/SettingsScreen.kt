@@ -1,6 +1,8 @@
 package com.example.ui.screens
 
 import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,20 +17,27 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AltRoute
+import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Dns
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lan
+import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.SettingsEthernet
+import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -49,6 +58,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.core.model.BridgeConfig
 import com.example.core.model.DnsTunnelConfig
+import com.example.core.model.RoutingMode
+import com.example.core.model.TestMode
+import com.example.ui.components.PerAppProxyDialog
 import com.example.ui.components.RtlProvider
 import com.example.ui.viewmodel.MainViewModel
 
@@ -57,13 +69,14 @@ fun SettingsScreen(
     viewModel: MainViewModel,
     modifier: Modifier = Modifier
 ) {
-    val autoRecovery by viewModel.autoRecovery.collectAsState()
+    val settings by viewModel.v2raySettings.collectAsState()
     val dnsTunnel by viewModel.dnsTunnelConfig.collectAsState()
     val bridgeConfig by viewModel.bridgeConfig.collectAsState()
 
     var showClearDialog by remember { mutableStateOf(false) }
     var showDnsDialog by remember { mutableStateOf(false) }
     var showBridgeDialog by remember { mutableStateOf(false) }
+    var showPerAppDialog by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
 
@@ -75,52 +88,68 @@ fun SettingsScreen(
                 .padding(horizontal = 16.dp, vertical = 14.dp)
         ) {
             Text(
-                text = "تنظیمات و پل‌های ارتباطی",
+                text = "تنظیمات پیشرفته آزادیار (v2rayNG Core)",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
             Text(
-                text = "مدیریت بازیابی خودکار، پل‌های واسط، تونل DNS و داده‌های محلی",
+                text = "پیکربندی تفکیک برنامه‌ها، روتینگ، دی‌ان‌اس، تست تاخیر واقعی و پروتکل‌ها",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Auto-Recovery Setting
+            // 1. ROUTING MODE SECTION
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(14.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
             ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "بازیابی خودکار اتصال (Auto-Recovery)",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp
-                        )
-                        Text(
-                            text = "در صورت قطع ارتباط سرور، به صورت خودکار سالم‌ترین کانفیگ بعدی جایگزین می‌شود.",
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.AltRoute, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("حالت‌های مسیریابی ترافیک (Routing Rules)", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     }
-                    Switch(
-                        checked = autoRecovery,
-                        onCheckedChange = { viewModel.setAutoRecovery(it) },
-                        modifier = Modifier.testTag("auto_recovery_switch")
-                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    RoutingMode.values().forEach { mode ->
+                        val isSelected = settings.routingMode == mode
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surface,
+                            border = if (isSelected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 3.dp)
+                                .clickable {
+                                    viewModel.updateV2raySettings(settings.copy(routingMode = mode))
+                                }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = isSelected,
+                                    onClick = { viewModel.updateV2raySettings(settings.copy(routingMode = mode)) }
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Column {
+                                    Text(text = mode.titlePersian, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                    Text(text = mode.descPersian, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Bridge / Intermediate Server Section
+            // 2. PER-APP PROXY SECTION
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(14.dp),
@@ -133,10 +162,320 @@ fun SettingsScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Lan, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                            Icon(Icons.Default.Apps, contentDescription = null, tint = Color(0xFF8B5CF6), modifier = Modifier.size(20.dp))
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("پل‌های واسط و خردکردن بسته‌ها (Fragmentation)", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            Text("تفکیک برنامه‌ها (Per-App Proxy)", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                         }
+                        Switch(
+                            checked = settings.perAppProxyEnabled,
+                            onCheckedChange = {
+                                viewModel.updateV2raySettings(settings.copy(perAppProxyEnabled = it))
+                            },
+                            modifier = Modifier.testTag("per_app_proxy_switch")
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Text(
+                        text = if (settings.perAppProxyEnabled) {
+                            "فعال: ${settings.selectedApps.size} برنامه انتخاب شده (${if (settings.perAppProxyBypassMode) "معاف‌سازی" else "تونل اختصاصی"})"
+                        } else {
+                            "غیرفعال: همه برنامه‌های دستگاه به صورت یکپارچه از فیلترشکن استفاده می‌کنند."
+                        },
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    OutlinedButton(
+                        onClick = { showPerAppDialog = true },
+                        shape = RoundedCornerShape(8.dp),
+                        enabled = settings.perAppProxyEnabled,
+                        modifier = Modifier.testTag("manage_per_app_button")
+                    ) {
+                        Icon(Icons.Default.Tune, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("انتخاب و مدیریت برنامه‌ها (${settings.selectedApps.size})", fontSize = 11.sp)
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // 3. TESTING ENGINE & AUTOMATION SECTION
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Speed, contentDescription = null, tint = Color(0xFF0288D1), modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("تست تاخیر واقعی و خودکارسازی (Real Delay)", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Test Mode Chips
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TestMode.values().forEach { mode ->
+                            FilterChip(
+                                selected = settings.testMode == mode,
+                                onClick = { viewModel.updateV2raySettings(settings.copy(testMode = mode)) },
+                                label = { Text(mode.titlePersian, fontSize = 11.sp) }
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "آدرس URL برای تست تاخیر واقعی (generate_204):",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    OutlinedTextField(
+                        value = settings.realDelayTestUrl,
+                        onValueChange = { viewModel.updateV2raySettings(settings.copy(realDelayTestUrl = it)) },
+                        singleLine = true,
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    // Preset buttons
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        OutlinedButton(
+                            onClick = { viewModel.updateV2raySettings(settings.copy(realDelayTestUrl = "https://www.gstatic.com/generate_204")) },
+                            shape = RoundedCornerShape(6.dp)
+                        ) {
+                            Text("Google gstatic", fontSize = 10.sp)
+                        }
+                        OutlinedButton(
+                            onClick = { viewModel.updateV2raySettings(settings.copy(realDelayTestUrl = "https://cp.cloudflare.com/generate_204")) },
+                            shape = RoundedCornerShape(6.dp)
+                        ) {
+                            Text("Cloudflare cp", fontSize = 10.sp)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Auto delete failed configs switch
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("حذف خودکار کانفیگ‌های نامعتبر پس از تست", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            Text("کانفیگ‌های تایم‌اوت و بدون پاسخ پس از اتمام تست فوراً حذف می‌شوند.", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Switch(
+                            checked = settings.autoDeleteInvalidAfterTest,
+                            onCheckedChange = { viewModel.updateV2raySettings(settings.copy(autoDeleteInvalidAfterTest = it)) }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Auto sort configs by ping
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("مرتب‌سازی خودکار بر اساس کمترین پینگ", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            Text("پس از پایان تست، سالم‌ترین و پرسرعت‌ترین کانفیگ‌ها در بالای لیست قرار می‌گیرند.", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Switch(
+                            checked = settings.autoSortAfterTest,
+                            onCheckedChange = { viewModel.updateV2raySettings(settings.copy(autoSortAfterTest = it)) }
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // 4. DNS CONFIGURATION SECTION
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Dns, contentDescription = null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("تنظیمات سرور DNS (ضد مسمومیت DNS)", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text("سرور DNS راه دور (Remote DNS):", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    OutlinedTextField(
+                        value = settings.remoteDns,
+                        onValueChange = { viewModel.updateV2raySettings(settings.copy(remoteDns = it)) },
+                        singleLine = true,
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    // Preset DNS buttons
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        OutlinedButton(
+                            onClick = { viewModel.updateV2raySettings(settings.copy(remoteDns = "1.1.1.1")) },
+                            shape = RoundedCornerShape(6.dp)
+                        ) {
+                            Text("Cloudflare 1.1.1.1", fontSize = 10.sp)
+                        }
+                        OutlinedButton(
+                            onClick = { viewModel.updateV2raySettings(settings.copy(remoteDns = "8.8.8.8")) },
+                            shape = RoundedCornerShape(6.dp)
+                        ) {
+                            Text("Google 8.8.8.8", fontSize = 10.sp)
+                        }
+                        OutlinedButton(
+                            onClick = { viewModel.updateV2raySettings(settings.copy(remoteDns = "94.140.14.14")) },
+                            shape = RoundedCornerShape(6.dp)
+                        ) {
+                            Text("AdGuard", fontSize = 10.sp)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Fake DNS toggle
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("خنثی‌سازی مسمومیت DNS (Fake DNS Protection)", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            Text("از جعل آدرس‌های اینترنتی توسط شبکه جلوگیری می‌کند.", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Switch(
+                            checked = settings.enableFakeDns,
+                            onCheckedChange = { viewModel.updateV2raySettings(settings.copy(enableFakeDns = it)) }
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // 5. TUNNEL & ADVANCED NETWORK SETTINGS
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.SettingsEthernet, contentDescription = null, tint = Color(0xFF10B981), modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("تنظیمات فنی تونل (MTU و اشتراک هات‌اسپات)", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Text("اندازه بسته MTU تونل شبکه:", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf(1280, 1360, 1400, 1500).forEach { mtuVal ->
+                            FilterChip(
+                                selected = settings.mtu == mtuVal,
+                                onClick = { viewModel.updateV2raySettings(settings.copy(mtu = mtuVal)) },
+                                label = {
+                                    Text(
+                                        text = if (mtuVal == 1360) "$mtuVal (ایران)" else mtuVal.toString(),
+                                        fontSize = 11.sp
+                                    )
+                                }
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Enable UDP toggle
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("فعال‌سازی ترافیک UDP (تماس صوتی و بازی)", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            Text("برای برقراری تماس صوتی تلگرام، واتساپ و کاهش پینگ بازی‌ها لازم است.", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Switch(
+                            checked = settings.enableUdp,
+                            onCheckedChange = { viewModel.updateV2raySettings(settings.copy(enableUdp = it)) }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Share LAN toggle
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("اشتراک‌گذاری در شبکه محلی (Share LAN / هات‌اسپات)", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            Text("امکان اتصال لپ‌تاپ یا سایر گوشی‌ها از طریق پورت SOCKS5 محلی (۱۰۸۰۸)", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Switch(
+                            checked = settings.allowLanSharing,
+                            onCheckedChange = { viewModel.updateV2raySettings(settings.copy(allowLanSharing = it)) }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Auto reconnect toggle
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("اتصال مجدد خودکار (Auto Reconnect)", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            Text("در صورت قطعی ارتباط یا تغییر اینترنت (وای‌فای/همراه)، بهترین مسیر سالم به سرعت وصل می‌شود.", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Switch(
+                            checked = settings.autoReconnect,
+                            onCheckedChange = { viewModel.updateV2raySettings(settings.copy(autoReconnect = it)) }
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // 6. BRIDGE & FRAGMENTATION
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Lan, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("پل‌های واسط و خردکردن بسته‌ها (TLS Fragmentation)", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     }
 
                     Spacer(modifier = Modifier.height(6.dp))
@@ -145,7 +484,7 @@ fun SettingsScreen(
                         text = if (bridgeConfig.isEnabled)
                             "فعال: آدرس پل ${bridgeConfig.bridgeHost} | خردسازی: ${if (bridgeConfig.enableFragmentation) "فعال" else "غیرفعال"}"
                         else
-                            "پل واسط غیرفعال است. امکان تنظیم آی‌پی تمیز (Clean IP) و خردسازی بسته‌های TLS جهت عبور از DPI فراهم است.",
+                            "پل واسط غیرفعال است. امکان تنظیم آی‌پی تمیز و خردسازی بسته‌های ClientHello جهت عبور از DPI فراهم است.",
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -163,7 +502,7 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // DNS Tunnel (dnstt) Section
+            // 7. DNS TUNNEL (dnstt)
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(14.dp),
@@ -171,9 +510,9 @@ fun SettingsScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Dns, contentDescription = null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(20.dp))
+                        Icon(Icons.Default.NetworkCheck, contentDescription = null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(20.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("تونل DNS (پروتکل dnstt)", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        Text("تونل DNS اختصاصی (پروتکل dnstt)", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     }
 
                     Spacer(modifier = Modifier.height(6.dp))
@@ -183,14 +522,6 @@ fun SettingsScreen(
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFFF59E0B)
-                    )
-
-                    Spacer(modifier = Modifier.height(4.dp))
-
-                    Text(
-                        text = "توجه فنی: تونل DNS نیازمند دامنه با رکورد NS اختصاصی و سرور dnstt سمت مقابل است. بازبودن پورت ۵۳ به تنهایی اینترنت آزاد فراهم نمی‌کند.",
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
                     Spacer(modifier = Modifier.height(10.dp))
@@ -206,7 +537,7 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Database & Cache Management
+            // 8. DATABASE & CACHE MANAGEMENT
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(14.dp),
@@ -222,7 +553,7 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(6.dp))
 
                     Text(
-                        text = "حذف تمام کانفیگ‌های ذخیره‌شده و بازنشانی نتایج تست.",
+                        text = "پاکسازی کامل تمام کانفیگ‌ها و پروکسی‌های ثبت‌شده.",
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -235,7 +566,7 @@ fun SettingsScreen(
                         shape = RoundedCornerShape(8.dp),
                         modifier = Modifier.testTag("clear_all_configs_button")
                     ) {
-                        Text("پاکسازی تمام کانفیگ‌ها", fontSize = 11.sp)
+                        Text("پاکسازی تمام کانفیگ‌ها و پروکسی‌ها", fontSize = 11.sp)
                     }
                 }
             }
@@ -256,7 +587,7 @@ fun SettingsScreen(
                     }
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "نسخه ۱.۰.۰ | ابزار متن‌باز، بدون لاگ و بدون ردیابی ترافیک کاربر. تمام عملیات تفکیک، رمزنگاری و تست‌ها مستقیماً روی دستگاه انجام می‌شود.",
+                        text = "نسخه ۱.۱.۰ | مجهز به هسته سنجش تاخیر واقعی (Real Delay Test)، تفکیک برنامه‌ها (Per-App Proxy)، مسیریابی ضد تحریم و پروکسی چندگانه. تمام عملیات رمزنگاری و تست روی دستگاه انجام می‌شود.",
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -264,18 +595,27 @@ fun SettingsScreen(
             }
         }
 
+        // Per-App Proxy Dialog
+        if (showPerAppDialog) {
+            PerAppProxyDialog(
+                viewModel = viewModel,
+                onDismiss = { showPerAppDialog = false }
+            )
+        }
+
         // Clear Dialog
         if (showClearDialog) {
             AlertDialog(
                 onDismissRequest = { showClearDialog = false },
-                title = { Text("پاکسازی پایگاه داده کانفیگ‌ها") },
-                text = { Text("آیا مطمئن هستید؟ تمام کانفیگ‌های دریافت‌شده حذف خواهند شد.") },
+                title = { Text("پاکسازی پایگاه داده") },
+                text = { Text("آیا مطمئن هستید؟ تمام کانفیگ‌ها و پروکسی‌های ذخیره‌شده حذف خواهند شد.") },
                 confirmButton = {
                     Button(
                         onClick = {
                             viewModel.clearAllConfigs()
+                            viewModel.clearAllProxies()
                             showClearDialog = false
-                            Toast.makeText(context, "تمام کانفیگ‌ها پاکسازی شدند", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "تمام داده‌ها پاکسازی شدند", Toast.LENGTH_SHORT).show()
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444))
                     ) {
@@ -295,7 +635,6 @@ fun SettingsScreen(
             var domain by remember { mutableStateOf(dnsTunnel.domain) }
             var resolver by remember { mutableStateOf(dnsTunnel.resolverIp) }
             var pubKey by remember { mutableStateOf(dnsTunnel.pubKey) }
-            var isEnabled by remember { mutableStateOf(dnsTunnel.isEnabled) }
 
             AlertDialog(
                 onDismissRequest = { showDnsDialog = false },

@@ -99,6 +99,7 @@ fun HomeScreen(
     val proxies by viewModel.proxies.collectAsState()
     val fetchProgress by viewModel.fetchProgress.collectAsState()
     val proxyFetchProgress by viewModel.proxyFetchProgress.collectAsState()
+    val v2raySettings by viewModel.v2raySettings.collectAsState()
 
     var showShareQrDialog by remember { mutableStateOf(false) }
 
@@ -321,7 +322,63 @@ fun HomeScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Active v2rayNG Profile Chips
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(
+                        text = when (v2raySettings.routingMode) {
+                            com.example.core.model.RoutingMode.BYPASS_IRAN_LAN -> "دور زدن ایران و LAN"
+                            com.example.core.model.RoutingMode.GLOBAL -> "مسیریابی سراسری"
+                            com.example.core.model.RoutingMode.PROXY_ONLY -> "فقط فیلتر شده"
+                        },
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(6.dp))
+
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(
+                        text = if (v2raySettings.perAppProxyEnabled) "تفکیک: ${v2raySettings.selectedApps.size} برنامه" else "تمام برنامه‌ها",
+                        fontSize = 10.sp,
+                        color = if (v2raySettings.perAppProxyEnabled) Color(0xFF8B5CF6) else MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(6.dp))
+
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(
+                        text = "DNS: ${v2raySettings.remoteDns}",
+                        fontSize = 10.sp,
+                        color = Color(0xFF0288D1),
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
 
             // LIVE HIGH-TECH CONNECTION STATUS CARD (When Connected)
             if (connectionState is ConnectionState.Connected) {

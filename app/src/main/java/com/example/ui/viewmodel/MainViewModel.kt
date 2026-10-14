@@ -102,6 +102,12 @@ class MainViewModel : ViewModel() {
     val bridgeConfig = MutableStateFlow(BridgeConfig())
     val autoRecovery = MutableStateFlow(true)
 
+    val v2raySettingsManager = app.v2raySettingsManager
+    val v2raySettings: StateFlow<com.example.core.model.V2raySettings> = v2raySettingsManager.settings
+
+    val installedApps = MutableStateFlow<List<com.example.core.model.AppPackageInfo>>(emptyList())
+    val isLoadingApps = MutableStateFlow(false)
+
     val filteredConfigs: StateFlow<List<ConfigItem>> = combine(
         repository.getAllConfigsFlow(),
         searchQuery,
@@ -250,35 +256,61 @@ class MainViewModel : ViewModel() {
         }
     }
 
-    fun testSingleConfig(config: ConfigItem) {
+    fun testSingleConfig(config: ConfigItem, overrideMode: com.example.core.model.TestMode? = null) {
         viewModelScope.launch {
-            tester.testConfig(config)
+            val settings = v2raySettings.value
+            val effectiveMode = overrideMode ?: settings.testMode
+            tester.testConfig(config, testMode = effectiveMode, testUrl = settings.realDelayTestUrl)
         }
     }
 
-    fun testAllConfigs() {
+    fun testAllConfigs(overrideMode: com.example.core.model.TestMode? = null) {
         viewModelScope.launch {
             val list = repository.getAllConfigs()
             if (list.isEmpty()) return@launch
 
+            val settings = v2raySettings.value
+            val effectiveMode = overrideMode ?: settings.testMode
+
             _isTestingAll.value = true
-            tester.testBatchHighSpeedFlow(list, concurrency = 40).collect { pair ->
+            tester.testBatchHighSpeedFlow(
+                configs = list,
+                testMode = effectiveMode,
+                testUrl = settings.realDelayTestUrl,
+                concurrency = 30
+            ).collect { pair ->
                 _testProgress.value = pair
             }
             _isTestingAll.value = false
+
+            // Auto-delete invalid configs if enabled in v2ray settings
+            if (settings.autoDeleteInvalidAfterTest) {
+                repository.deleteFailedConfigs()
+            }
+            // Auto-sort by lowest ping if enabled
+            if (settings.autoSortAfterTest) {
+                sortOption.value = ConfigSortOption.LOWEST_PING
+            }
         }
     }
 
-    fun testAllProxies() {
+    fun testAllProxies(overrideMode: com.example.core.model.TestMode? = null) {
         viewModelScope.launch {
             val list = repository.getAllProxies()
             if (list.isEmpty()) return@launch
 
+            val settings = v2raySettings.value
+            val effectiveMode = overrideMode ?: settings.testMode
+
             _isTestingProxies.value = true
-            tester.testProxiesBatchFlow(list, concurrency = 40).collect { pair ->
+            tester.testProxiesBatchFlow(list, testMode = effectiveMode, concurrency = 30).collect { pair ->
                 _proxyTestProgress.value = pair
             }
             _isTestingProxies.value = false
+
+            if (settings.autoDeleteInvalidAfterTest) {
+                repository.deleteFailedProxies()
+            }
         }
     }
 
@@ -398,5 +430,39 @@ class MainViewModel : ViewModel() {
 
     fun updateBridge(cfg: BridgeConfig) {
         bridgeConfig.value = cfg
+    }
+
+    fun updateV2raySettings(newSettings: com.example.core.model.V2raySettings) {
+        v2raySettingsManager.updateSettings(newSettings)
+        autoRecovery.value = newSettings.autoReconnect
+        connectionManager.autoRecoveryEnabled = newSettings.autoReconnect
+    }
+
+    fun loadInstalledApps() {
+        viewModelScope.launch {
+            isLoadingApps.value = true
+            installedApps.value = v2raySettingsManager.getInstalledApplications()
+            isLoadingApps.value = false
+        }
+    }
+
+    fun toggleAppSelection(packageName: String) {
+        val current = v2raySettings.value
+        val updatedApps = if (current.selectedApps.contains(packageName)) {
+            current.selectedApps - packageName
+        } else {
+            current.selectedApps + packageName
+        }
+        updateV2raySettings(current.copy(selectedApps = updatedApps))
+    }
+
+    fun selectAllApps(apps: List<com.example.core.model.AppPackageInfo>) {
+        val current = v2raySettings.value
+        updateV2raySettings(current.copy(selectedApps = apps.map { it.packageName }.toSet()))
+    }
+
+    fun deselectAllApps() {
+        val current = v2raySettings.value
+        updateV2raySettings(current.copy(selectedApps = emptySet()))
     }
 }
