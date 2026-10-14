@@ -258,9 +258,9 @@ class AzadiRepository(private val database: AzadiDatabase) {
                     countryFlag = "🇩🇪",
                     isBypassNationalNet = true,
                     isHalfPriceDomestic = false,
-                    pingMs = 120,
-                    qualityScore = 95,
-                    testStatus = TestStatus.GLOBAL_ACCESS_CONFIRMED
+                    pingMs = -1,
+                    qualityScore = 0,
+                    testStatus = TestStatus.UNTESTED
                 ),
                 ConfigItem(
                     normalizedHash = "base_nl_vless_1",
@@ -278,9 +278,9 @@ class AzadiRepository(private val database: AzadiDatabase) {
                     countryFlag = "🇳🇱",
                     isBypassNationalNet = true,
                     isHalfPriceDomestic = false,
-                    pingMs = 145,
-                    qualityScore = 90,
-                    testStatus = TestStatus.TUNNEL_CONNECTED
+                    pingMs = -1,
+                    qualityScore = 0,
+                    testStatus = TestStatus.UNTESTED
                 ),
                 ConfigItem(
                     normalizedHash = "base_ir_mci_1",
@@ -298,9 +298,9 @@ class AzadiRepository(private val database: AzadiDatabase) {
                     countryFlag = "🇮🇷",
                     isBypassNationalNet = true,
                     isHalfPriceDomestic = true,
-                    pingMs = 38,
-                    qualityScore = 98,
-                    testStatus = TestStatus.GLOBAL_ACCESS_CONFIRMED
+                    pingMs = -1,
+                    qualityScore = 0,
+                    testStatus = TestStatus.UNTESTED
                 ),
                 ConfigItem(
                     normalizedHash = "base_fr_trojan_1",
@@ -318,9 +318,9 @@ class AzadiRepository(private val database: AzadiDatabase) {
                     countryFlag = "🇫🇷",
                     isBypassNationalNet = true,
                     isHalfPriceDomestic = false,
-                    pingMs = 158,
-                    qualityScore = 88,
-                    testStatus = TestStatus.REACHABLE_ENDPOINT
+                    pingMs = -1,
+                    qualityScore = 0,
+                    testStatus = TestStatus.UNTESTED
                 ),
                 ConfigItem(
                     normalizedHash = "base_tr_vmess_1",
@@ -338,9 +338,9 @@ class AzadiRepository(private val database: AzadiDatabase) {
                     countryFlag = "🇹🇷",
                     isBypassNationalNet = true,
                     isHalfPriceDomestic = false,
-                    pingMs = 85,
-                    qualityScore = 92,
-                    testStatus = TestStatus.TUNNEL_CONNECTED
+                    pingMs = -1,
+                    qualityScore = 0,
+                    testStatus = TestStatus.UNTESTED
                 ),
                 ConfigItem(
                     normalizedHash = "base_us_ss_1",
@@ -357,9 +357,9 @@ class AzadiRepository(private val database: AzadiDatabase) {
                     countryFlag = "🇺🇸",
                     isBypassNationalNet = false,
                     isHalfPriceDomestic = false,
-                    pingMs = 210,
-                    qualityScore = 75,
-                    testStatus = TestStatus.STRUCTURALLY_VALID
+                    pingMs = -1,
+                    qualityScore = 0,
+                    testStatus = TestStatus.UNTESTED
                 ),
                 ConfigItem(
                     normalizedHash = "base_fi_reality_1",
@@ -377,9 +377,9 @@ class AzadiRepository(private val database: AzadiDatabase) {
                     countryFlag = "🇫🇮",
                     isBypassNationalNet = true,
                     isHalfPriceDomestic = false,
-                    pingMs = 135,
-                    qualityScore = 93,
-                    testStatus = TestStatus.GLOBAL_ACCESS_CONFIRMED
+                    pingMs = -1,
+                    qualityScore = 0,
+                    testStatus = TestStatus.UNTESTED
                 ),
                 ConfigItem(
                     normalizedHash = "base_gb_vless_1",
@@ -397,9 +397,9 @@ class AzadiRepository(private val database: AzadiDatabase) {
                     countryFlag = "🇬🇧",
                     isBypassNationalNet = true,
                     isHalfPriceDomestic = false,
-                    pingMs = 160,
-                    qualityScore = 87,
-                    testStatus = TestStatus.TUNNEL_CONNECTED
+                    pingMs = -1,
+                    qualityScore = 0,
+                    testStatus = TestStatus.UNTESTED
                 )
             )
             for (cfg in baseConfigs) {
@@ -417,8 +417,8 @@ class AzadiRepository(private val database: AzadiDatabase) {
                     countryCode = "DE",
                     countryName = "آلمان",
                     countryFlag = "🇩🇪",
-                    pingMs = 125,
-                    isHealthy = true,
+                    pingMs = -1,
+                    isHealthy = false,
                     isDomestic = false,
                     sourceName = "مخزن معتبر آلمان SOCKS5"
                 ),
@@ -429,8 +429,8 @@ class AzadiRepository(private val database: AzadiDatabase) {
                     countryCode = "IR",
                     countryName = "ایران",
                     countryFlag = "🇮🇷",
-                    pingMs = 32,
-                    isHealthy = true,
+                    pingMs = -1,
+                    isHealthy = false,
                     isDomestic = true,
                     sourceName = "سرور پروکسی داخلی ایران"
                 ),
@@ -441,8 +441,8 @@ class AzadiRepository(private val database: AzadiDatabase) {
                     countryCode = "NL",
                     countryName = "هلند",
                     countryFlag = "🇳🇱",
-                    pingMs = 140,
-                    isHealthy = true,
+                    pingMs = -1,
+                    isHealthy = false,
                     isDomestic = false,
                     sourceName = "پروکسی اختصاصی آمستردام"
                 ),
@@ -453,8 +453,8 @@ class AzadiRepository(private val database: AzadiDatabase) {
                     countryCode = "FR",
                     countryName = "فرانسه",
                     countryFlag = "🇫🇷",
-                    pingMs = 152,
-                    isHealthy = true,
+                    pingMs = -1,
+                    isHealthy = false,
                     isDomestic = false,
                     sourceName = "مخزن بین‌المللی فرانسه HTTPS"
                 ),
@@ -465,8 +465,8 @@ class AzadiRepository(private val database: AzadiDatabase) {
                     countryCode = "US",
                     countryName = "آمریکا",
                     countryFlag = "🇺🇸",
-                    pingMs = 215,
-                    isHealthy = true,
+                    pingMs = -1,
+                    isHealthy = false,
                     isDomestic = false,
                     sourceName = "پروکسی پایدار نیویورک"
                 ),
@@ -477,8 +477,8 @@ class AzadiRepository(private val database: AzadiDatabase) {
                     countryCode = "TR",
                     countryName = "ترکیه",
                     countryFlag = "🇹🇷",
-                    pingMs = 90,
-                    isHealthy = true,
+                    pingMs = -1,
+                    isHealthy = false,
                     isDomestic = false,
                     sourceName = "پروکسی استانبول SOCKS5"
                 ),
@@ -489,9 +489,9 @@ class AzadiRepository(private val database: AzadiDatabase) {
                     secretOrAuth = "ee000000000000000000000000000000007777772e636c6f7564666c6172652e636f6d",
                     countryCode = "FI",
                     countryName = "فنلاند",
-                    countryFlag = "🇫🇮",
-                    pingMs = 138,
-                    isHealthy = true,
+                    countryFlag = "🇫🇷",
+                    pingMs = -1,
+                    isHealthy = false,
                     isDomestic = false,
                     sourceName = "پروکسی تلگرام ضد فیلتر هلسینکی"
                 ),
@@ -503,8 +503,8 @@ class AzadiRepository(private val database: AzadiDatabase) {
                     countryCode = "IR",
                     countryName = "ایران",
                     countryFlag = "🇮🇷",
-                    pingMs = 28,
-                    isHealthy = true,
+                    pingMs = -1,
+                    isHealthy = false,
                     isDomestic = true,
                     sourceName = "پروکسی تلگرام اپراتوری همراه اول و ایرانسل"
                 )

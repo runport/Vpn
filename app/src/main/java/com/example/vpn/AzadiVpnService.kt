@@ -243,7 +243,11 @@ class AzadiVpnService : VpnService() {
                 startBandwidthMonitor()
                 runTunnelLoop(pfd, settings.remoteDns)
             } catch (e: Exception) {
-                val errMsg = "خطا در برقراری تونل: ${e.message}"
+                val errMsg = if (e is java.net.SocketTimeoutException) {
+                    "سرور $server:$port پاسخ نداد (تایم‌اوت؛ پورت توسط نت ملی فیلتر شده یا سرور خاموش است)"
+                } else {
+                    "خطا در برقراری تونل: ${e.message}"
+                }
                 AppLogger.e("VPN", errMsg, e)
                 _vpnStatusFlow.value = VpnServiceStatus.Error(errMsg)
                 stopVpnTunnel()

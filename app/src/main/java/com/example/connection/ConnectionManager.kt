@@ -217,7 +217,21 @@ class ConnectionManager(
 
     private fun handleConnectionDrop(reason: String) {
         stopHealthMonitor()
-        if (activeConfig != null && autoRecoveryEnabled && reconnectAttempts < maxReconnectAttempts) {
+        val failed = activeConfig
+        if (failed != null) {
+            failedConfigIdsInSession.add(failed.id)
+            scope.launch {
+                repository.updateTestResult(
+                    id = failed.id,
+                    status = com.example.core.model.TestStatus.FAILED,
+                    pingMs = -1,
+                    score = 0,
+                    errorMessage = reason,
+                    isSuccess = false
+                )
+            }
+        }
+        if (failed != null && autoRecoveryEnabled && reconnectAttempts < maxReconnectAttempts) {
             triggerAutoRecovery(reason)
         } else {
             _connectionState.value = ConnectionState.Error(
@@ -228,27 +242,55 @@ class ConnectionManager(
     }
 
     private fun triggerAutoRecovery(reason: String) {
-        activeConfig?.let { failedConfigIdsInSession.add(it.id) }
         reconnectAttempts++
         AppLogger.w("CONN", "تلاش برای بازیابی خودکار اتصال ($reconnectAttempts از $maxReconnectAttempts): $reason")
 
         scope.launch {
             _connectionState.value = ConnectionState.Reconnecting(
                 attempts = reconnectAttempts,
-                reason = "تلاش مجدد ($reconnectAttempts از $maxReconnectAttempts): $reason"
+                reason = "جستجوی مسیر جایگزین ($reconnectAttempts از $maxReconnectAttempts)..."
             )
-            delay(1500)
+            delay(1000)
 
-            val nextChoice = selector.selectBestConfig(failedConfigIdsInSession)
-            val fallback = nextChoice.selectedConfig
-            if (fallback != null) {
-                AppLogger.s("CONN", "مسیر جایگزین یافت شد: ${fallback.remarks}. شروع انتقال تونل...")
-                activeConfig = fallback
-                dispatchVpnIntent(fallback.id, fallback.server, fallback.port, fallback.remarks, fallback.protocol.name, isProxy = false)
+            val settings = com.example.AzadiYarApp.instance.v2raySettingsManager.getSettings()
+            var verifiedFallback: ConfigItem? = null
+
+            // Test candidate fallbacks first before attempting to establish VPN tunnel
+            var attempts = 0
+            while (attempts < 3) {
+                val nextChoice = selector.selectBestConfig(failedConfigIdsInSession)
+                val candidate = nextChoice.selectedConfig ?: break
+                failedConfigIdsInSession.add(candidate.id)
+                attempts++
+
+                AppLogger.i("CONN", "بررسی سریع مسیر جایگزین: ${candidate.remarks} [${candidate.server}:${candidate.port}]...")
+                _connectionState.value = ConnectionState.Reconnecting(
+                    attempts = reconnectAttempts,
+                    reason = "آزمایش پاسخ‌دهی سرور: ${candidate.remarks}..."
+                )
+
+                val testResult = tester.testConfig(candidate, testMode = settings.testMode, testUrl = settings.realDelayTestUrl)
+                if (testResult.status != com.example.core.model.TestStatus.FAILED && testResult.pingMs > 0) {
+                    verifiedFallback = candidate.copy(
+                        pingMs = testResult.pingMs,
+                        qualityScore = testResult.score,
+                        testStatus = testResult.status
+                    )
+                    break
+                } else {
+                    AppLogger.w("CONN", "مسیر جایگزین ${candidate.remarks} پاسخ نداد: ${testResult.errorMessage ?: "تایم‌اوت"}")
+                }
+            }
+
+            if (verifiedFallback != null) {
+                AppLogger.s("CONN", "مسیر جایگزین تأیید شد: ${verifiedFallback.remarks} (پینگ: ${verifiedFallback.pingMs}ms). انتقال تونل...")
+                activeConfig = verifiedFallback
+                _connectionState.value = ConnectionState.Connecting(verifiedFallback.remarks, "در حال ایجاد تونل به مسیر جدید...")
+                dispatchVpnIntent(verifiedFallback.id, verifiedFallback.server, verifiedFallback.port, verifiedFallback.remarks, verifiedFallback.protocol.name, isProxy = false)
             } else {
                 AppLogger.e("CONN", "هیچ مسیر سالمی برای بازیابی خودکار یافت نشد")
                 _connectionState.value = ConnectionState.Error(
-                    "هیچ مسیر جایگزین سالمی برای بازیابی یافت نشد.",
+                    "سرورهای انتخابی پاسخ ندادند (تایم‌اوت یا مسدود بودن پورت توسط نت ملی). از منوی کانفیگ‌ها دکمه «تست تاخیر واقعی همه» را بزنید تا کانفیگ‌های زنده مشخص شوند.",
                     canAutoRecover = false
                 )
             }
