@@ -70,12 +70,8 @@ fun SettingsScreen(
     modifier: Modifier = Modifier
 ) {
     val settings by viewModel.v2raySettings.collectAsState()
-    val dnsTunnel by viewModel.dnsTunnelConfig.collectAsState()
-    val bridgeConfig by viewModel.bridgeConfig.collectAsState()
 
     var showClearDialog by remember { mutableStateOf(false) }
-    var showDnsDialog by remember { mutableStateOf(false) }
-    var showBridgeDialog by remember { mutableStateOf(false) }
     var showPerAppDialog by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
@@ -465,7 +461,7 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // 6. BRIDGE & FRAGMENTATION
+            // 6. LOCAL INBOUND PROXY PORTS (SOCKS5 / HTTP)
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(14.dp),
@@ -475,63 +471,61 @@ fun SettingsScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.Lan, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("پل‌های واسط و خردکردن بسته‌ها (TLS Fragmentation)", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        Text("پورت‌های پروکسی ورودی محلی (Inbound SOCKS5)", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     }
 
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
-                        text = if (bridgeConfig.isEnabled)
-                            "فعال: آدرس پل ${bridgeConfig.bridgeHost} | خردسازی: ${if (bridgeConfig.enableFragmentation) "فعال" else "غیرفعال"}"
-                        else
-                            "پل واسط غیرفعال است. امکان تنظیم آی‌پی تمیز و خردسازی بسته‌های ClientHello جهت عبور از DPI فراهم است.",
+                        text = "سرور SOCKS5 محلی در زمان اتصال فیلترشکن روی پورت ${settings.localSocksPort} اجرا می‌شود. می‌توانید در تلگرام، مرورگرها یا سایر دستگاه‌های متصل به هات‌اسپات، آدرس پروکسی را تنظیم کنید:",
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    OutlinedButton(
-                        onClick = { showBridgeDialog = true },
-                        shape = RoundedCornerShape(8.dp)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Text("پیکربندی پل واسط و خردسازی", fontSize = 11.sp)
-                    }
-                }
-            }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("پورت SOCKS5:", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            OutlinedTextField(
+                                value = settings.localSocksPort.toString(),
+                                onValueChange = { str ->
+                                    val port = str.toIntOrNull() ?: settings.localSocksPort
+                                    viewModel.updateV2raySettings(settings.copy(localSocksPort = port))
+                                },
+                                singleLine = true,
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
 
-            Spacer(modifier = Modifier.height(14.dp))
-
-            // 7. DNS TUNNEL (dnstt)
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(14.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.NetworkCheck, contentDescription = null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(20.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("تونل DNS اختصاصی (پروتکل dnstt)", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("پورت HTTP:", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            OutlinedTextField(
+                                value = settings.localHttpPort.toString(),
+                                onValueChange = { str ->
+                                    val port = str.toIntOrNull() ?: settings.localHttpPort
+                                    viewModel.updateV2raySettings(settings.copy(localHttpPort = port))
+                                },
+                                singleLine = true,
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(6.dp))
-
                     Text(
-                        text = "وضعیت: ${dnsTunnel.serverStatus}",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFFF59E0B)
+                        text = "آدرس پروکسی تلگرام: 127.0.0.1:${settings.localSocksPort} بدون نیاز به نام‌کاربری و رمز",
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold
                     )
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    OutlinedButton(
-                        onClick = { showDnsDialog = true },
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text("تنظیم مشخصات سرور DNS Tunnel", fontSize = 11.sp)
-                    }
                 }
             }
 
@@ -624,136 +618,6 @@ fun SettingsScreen(
                 },
                 dismissButton = {
                     TextButton(onClick = { showClearDialog = false }) {
-                        Text("انصراف")
-                    }
-                }
-            )
-        }
-
-        // DNS Tunnel Dialog
-        if (showDnsDialog) {
-            var domain by remember { mutableStateOf(dnsTunnel.domain) }
-            var resolver by remember { mutableStateOf(dnsTunnel.resolverIp) }
-            var pubKey by remember { mutableStateOf(dnsTunnel.pubKey) }
-
-            AlertDialog(
-                onDismissRequest = { showDnsDialog = false },
-                title = { Text("پیکربندی سرور DNS Tunnel (dnstt)") },
-                text = {
-                    Column {
-                        Text("برای استفاده از این روش باید سرور اختصاصی dnstt-server را راه‌اندازی کرده باشید.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = domain,
-                            onValueChange = { domain = it },
-                            label = { Text("دامنه تونل (دارای رکورد NS)") },
-                            placeholder = { Text("t.example.com") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = resolver,
-                            onValueChange = { resolver = it },
-                            label = { Text("آی‌پی ریزالور DNS") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = pubKey,
-                            onValueChange = { pubKey = it },
-                            label = { Text("کلید عمومی سرور (Public Key)") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                },
-                confirmButton = {
-                    Button(onClick = {
-                        viewModel.updateDnsTunnel(
-                            DnsTunnelConfig(
-                                domain = domain,
-                                resolverIp = resolver,
-                                pubKey = pubKey,
-                                isEnabled = domain.isNotBlank(),
-                                serverStatus = if (domain.isNotBlank()) "پیکربندی ثبت شد (آماده تست سرور)" else "نیازمند سرور اختصاصی dnstt"
-                            )
-                        )
-                        showDnsDialog = false
-                    }) {
-                        Text("ذخیره")
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showDnsDialog = false }) {
-                        Text("انصراف")
-                    }
-                }
-            )
-        }
-
-        // Bridge & Fragmentation Dialog
-        if (showBridgeDialog) {
-            var host by remember { mutableStateOf(bridgeConfig.bridgeHost) }
-            var port by remember { mutableStateOf(bridgeConfig.bridgePort.toString()) }
-            var sni by remember { mutableStateOf(bridgeConfig.fakeSni) }
-            var frag by remember { mutableStateOf(bridgeConfig.enableFragmentation) }
-
-            AlertDialog(
-                onDismissRequest = { showBridgeDialog = false },
-                title = { Text("تنظیمات پل واسط و خردسازی TLS") },
-                text = {
-                    Column {
-                        OutlinedTextField(
-                            value = host,
-                            onValueChange = { host = it },
-                            label = { Text("آدرس پل / آی‌پی تمیز") },
-                            placeholder = { Text("مثال: clean.cloudflare.com") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = port,
-                            onValueChange = { port = it },
-                            label = { Text("پورت پل") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = sni,
-                            onValueChange = { sni = it },
-                            label = { Text("SNI جعلی / جایگزین") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("خردکردن بسته‌های ClientHello (TLS Frag)", fontSize = 12.sp, modifier = Modifier.weight(1f))
-                            Switch(checked = frag, onCheckedChange = { frag = it })
-                        }
-                    }
-                },
-                confirmButton = {
-                    Button(onClick = {
-                        viewModel.updateBridge(
-                            BridgeConfig(
-                                bridgeHost = host,
-                                bridgePort = port.toIntOrNull() ?: 443,
-                                fakeSni = sni,
-                                enableFragmentation = frag,
-                                isEnabled = host.isNotBlank() || frag
-                            )
-                        )
-                        showBridgeDialog = false
-                    }) {
-                        Text("ذخیره")
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showBridgeDialog = false }) {
                         Text("انصراف")
                     }
                 }
