@@ -58,6 +58,7 @@ data class DiagnosticReport(
     val isCurrentEndpointReachable: Boolean,
     val isTunnelActive: Boolean,
     val isTunnelGlobalVerified: Boolean,
+    val isNationalIntranet: Boolean = false,
     val overallStatusPersian: String,
     val steps: List<DiagnosticStep>
 )

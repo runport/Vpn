@@ -101,32 +101,54 @@ fun DiagnosticsScreen(
             // Diagnostic Results Banner
             if (report != null) {
                 val rep = report!!
+                val isSuccess = rep.isTunnelGlobalVerified || rep.isDirectGlobalReachable
+                val isMelli = rep.isNationalIntranet
+
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(
-                        containerColor = if (rep.isTunnelGlobalVerified || rep.isDirectGlobalReachable)
-                            Color(0xFF059669).copy(alpha = 0.12f)
-                        else
-                            Color(0xFFD97706).copy(alpha = 0.12f)
+                        containerColor = when {
+                            isSuccess -> Color(0xFF059669).copy(alpha = 0.12f)
+                            isMelli -> Color(0xFFDC2626).copy(alpha = 0.14f)
+                            else -> Color(0xFFD97706).copy(alpha = 0.12f)
+                        }
                     )
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            text = "نتیجه کلی تحلیل شبکه:",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "نتیجه کلی تحلیل شبکه:",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            if (isMelli) {
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Surface(
+                                    color = Color(0xFFDC2626),
+                                    shape = RoundedCornerShape(6.dp)
+                                ) {
+                                    Text(
+                                        text = "نت ملی فعال",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
                         Text(
                             text = rep.overallStatusPersian,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (rep.isTunnelGlobalVerified || rep.isDirectGlobalReachable)
-                                Color(0xFF10B981)
-                            else
-                                Color(0xFFF59E0B)
+                            color = when {
+                                isSuccess -> Color(0xFF10B981)
+                                isMelli -> Color(0xFFEF4444)
+                                else -> Color(0xFFF59E0B)
+                            }
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
@@ -134,6 +156,23 @@ fun DiagnosticsScreen(
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+
+                        if (isMelli) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = Color(0xFF7F1D1D).copy(alpha = 0.3f),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = "💡 راهکار عبور: سرورهای خارج از کشور مسدود شده‌اند اما شبکه داخلی فعال است. به تب کانفیگ‌ها بروید و فیلتر «عبور از نت ملی» را فعال کرده و از کانفیگ‌های Reality یا فرگمنت استفاده کنید.",
+                                    fontSize = 11.sp,
+                                    lineHeight = 18.sp,
+                                    color = Color(0xFFFCA5A5),
+                                    modifier = Modifier.padding(10.dp)
+                                )
+                            }
+                        }
                     }
                 }
 

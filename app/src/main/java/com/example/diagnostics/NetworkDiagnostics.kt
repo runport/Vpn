@@ -17,6 +17,10 @@ import java.net.InetSocketAddress
 import java.net.Socket
 import java.net.URL
 
+/**
+ * سیستم عیب‌یابی و پایش پیشرفته شبکه آزادیار
+ * با توانایی تفکیک هوشمند شبکه ملی (نت ملی / اینترانت داخلی) از اینترنت جهانی آزاد
+ */
 class NetworkDiagnostics(
     private val context: Context,
     private val repository: AzadiRepository
@@ -25,7 +29,7 @@ class NetworkDiagnostics(
     suspend fun runFullDiagnostics(): DiagnosticReport = withContext(Dispatchers.IO) {
         val steps = mutableListOf<DiagnosticStep>()
 
-        // 1. Device Local Network Check
+        // 1. برقراری اتصال محلی لایه فیزیکی (وای‌فای / دیتا همراه)
         val connManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         val activeNetwork = connManager.activeNetwork
         val capabilities = connManager.getNetworkCapabilities(activeNetwork)
@@ -46,6 +50,7 @@ class NetworkDiagnostics(
                     level = DiagnosticLevel.ERROR
                 )
             )
+            AppLogger.e("DIAGNOSTIC", "خطای شبکه محلی: هیچ رابط شبکه‌ای فعال نیست.")
             return@withContext DiagnosticReport(
                 networkType = "قطع",
                 localIp = null,
@@ -55,6 +60,7 @@ class NetworkDiagnostics(
                 isCurrentEndpointReachable = false,
                 isTunnelActive = false,
                 isTunnelGlobalVerified = false,
+                isNationalIntranet = false,
                 overallStatusPersian = "شبکه دستگاه کاملاً قطع است.",
                 steps = steps
             )
@@ -68,44 +74,106 @@ class NetworkDiagnostics(
             )
         }
 
-        // 2. DNS Resolution Test
-        var dnsWorking = false
+        // 2. آزمون دسترسی به شبکه داخلی کشور (سایت‌ها و سرورهای ملی)
+        var domesticReachable = false
+        var domesticDetails = ""
         try {
-            val addresses = InetAddress.getAllByName("cloudflare.com")
-            if (addresses.isNotEmpty()) {
-                dnsWorking = true
+            val domesticHosts = listOf("aparat.com", "varzesh3.com", "shaparak.ir")
+            for (host in domesticHosts) {
+                try {
+                    val addrs = InetAddress.getAllByName(host)
+                    if (addrs.isNotEmpty()) {
+                        val sock = Socket()
+                        sock.connect(InetSocketAddress(addrs.first(), 80), 2000)
+                        sock.close()
+                        domesticReachable = true
+                        domesticDetails = "ارتباط مستقیم با سرور داخلی ($host - ${addrs.first().hostAddress}) برقرار شد."
+                        break
+                    }
+                } catch (_: Exception) {
+                    // Try next domestic host
+                }
+            }
+
+            if (domesticReachable) {
                 steps.add(
                     DiagnosticStep(
-                        title = "سیستم نام دامنه (DNS)",
-                        detail = "تفکیک نام دامنه cloudflare.com با موفقیت انجام شد (${addresses.first().hostAddress}).",
+                        title = "شبکه داخلی کشور (اینترانت ملی)",
+                        detail = domesticDetails,
                         level = DiagnosticLevel.SUCCESS
+                    )
+                )
+            } else {
+                steps.add(
+                    DiagnosticStep(
+                        title = "شبکه داخلی کشور (اینترانت ملی)",
+                        detail = "سرورهای داخلی نیز در دسترس نیستند یا شبکه با قطعی کامل روبروست.",
+                        level = DiagnosticLevel.WARNING
                     )
                 )
             }
         } catch (e: Exception) {
             steps.add(
                 DiagnosticStep(
-                    title = "سیستم نام دامنه (DNS)",
-                    detail = "تفکیک نام دامنه با خطا مواجه شد: ${e.message ?: "پاسخی دریافت نشد"}. احتمال اختلال DNS وجود دارد.",
+                    title = "شبکه داخلی کشور",
+                    detail = "خطا در تست سرورهای داخلی: ${e.message}",
                     level = DiagnosticLevel.WARNING
                 )
             )
         }
 
-        // 3. Captive Portal Detection
+        // 3. آزمون تفکیک دامنه بین‌المللی (DNS Resolution)
+        var dnsWorking = false
+        var dnsPoisoned = false
+        val poisonedIps = setOf("10.10.34.35", "127.0.0.1", "0.0.0.0")
+        try {
+            val addresses = InetAddress.getAllByName("cloudflare.com")
+            if (addresses.isNotEmpty()) {
+                val resolvedIp = addresses.first().hostAddress ?: ""
+                if (poisonedIps.contains(resolvedIp) || resolvedIp.startsWith("10.10.")) {
+                    dnsPoisoned = true
+                    steps.add(
+                        DiagnosticStep(
+                            title = "سیستم نام دامنه (DNS)",
+                            detail = "هشدار: مسموم‌سازی DNS تشخیص داده شد! دامنه بین‌المللی به آی‌پی سامانه مسدودسازی ($resolvedIp) هدایت شده است.",
+                            level = DiagnosticLevel.ERROR
+                        )
+                    )
+                } else {
+                    dnsWorking = true
+                    steps.add(
+                        DiagnosticStep(
+                            title = "سیستم نام دامنه (DNS)",
+                            detail = "تفکیک نام دامنه cloudflare.com با موفقیت انجام شد ($resolvedIp).",
+                            level = DiagnosticLevel.SUCCESS
+                        )
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            steps.add(
+                DiagnosticStep(
+                    title = "سیستم نام دامنه (DNS بین‌الملل)",
+                    detail = "تفکیک نام دامنه‌های خارجی مسدود یا ناموفق است (${e.message ?: "عدم پاسخگویی"}).",
+                    level = DiagnosticLevel.WARNING
+                )
+            )
+        }
+
+        // 4. بررسی لاگین پرتال شبکه (Captive Portal)
         var isCaptive = false
         if (capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_CAPTIVE_PORTAL)) {
             isCaptive = true
             steps.add(
                 DiagnosticStep(
                     title = "پرتال لاگین شبکه (Captive Portal)",
-                    detail = "شناسایی شد! برای دسترسی به اینترنت باید ابتدا در شبکه لاگین کنید.",
+                    detail = "شناسایی شد! برای دسترسی به اینترنت باید ابتدا در پرتال لاگین کنید.",
                     level = DiagnosticLevel.WARNING
                 )
             )
         }
 
-        // 4. Direct Global TCP Connection Probe
+        // 5. آزمون اتصال مستقیم TCP به سرور بین‌المللی (خارج از کشور)
         var directTcpSuccess = false
         try {
             val probeSocket = Socket()
@@ -114,22 +182,22 @@ class NetworkDiagnostics(
             directTcpSuccess = true
             steps.add(
                 DiagnosticStep(
-                    title = "اتصال مستقیم TCP به سرور بین‌المللی",
-                    detail = "ارتباط مستقیم با آدرس 1.1.1.1:53 با موفقیت برقرار شد.",
+                    title = "اتصال مستقیم TCP به سرور خارجی (1.1.1.1)",
+                    detail = "ارتباط مستقیم با گیت‌وی و سرور بین‌المللی برقرار است.",
                     level = DiagnosticLevel.SUCCESS
                 )
             )
         } catch (e: Exception) {
             steps.add(
                 DiagnosticStep(
-                    title = "اتصال مستقیم TCP به سرور بین‌المللی",
-                    detail = "ارتباط مستقیم ناموفق بود. ترافیک بین‌المللی مستقیم مسدود یا فیلتر است.",
+                    title = "اتصال مستقیم TCP به سرور خارجی (1.1.1.1)",
+                    detail = "پکت‌های خروجی به سمت آی‌پی خارجی دراپ می‌شوند (گیت‌وی بین‌الملل زیرساخت مسدود است).",
                     level = DiagnosticLevel.INFO
                 )
             )
         }
 
-        // 5. Direct HTTPS External Probe
+        // 6. آزمون پروتکل HTTPS بین‌المللی
         var directGlobalVerified = false
         try {
             val url = URL("https://cp.cloudflare.com/generate_204")
@@ -143,7 +211,7 @@ class NetworkDiagnostics(
                 steps.add(
                     DiagnosticStep(
                         title = "آزمون وب بین‌المللی (HTTPS)",
-                        detail = "دسترسی مستقیم به اینترنت بین‌المللی بدون فیلتر فعال است.",
+                        detail = "دسترسی آزاد به وب بین‌الملل بدون فیلتر فعال است.",
                         level = DiagnosticLevel.SUCCESS
                     )
                 )
@@ -153,13 +221,13 @@ class NetworkDiagnostics(
             steps.add(
                 DiagnosticStep(
                     title = "آزمون وب بین‌المللی (HTTPS)",
-                    detail = "دسترسی مستقیم وب مسدود است (پاسخ HTTP 204 دریافت نشد).",
+                    detail = "دسترسی مستقیم به وب آزاد بین‌الملل مسدود است (پاسخ HTTP 204 دریافت نشد).",
                     level = DiagnosticLevel.INFO
                 )
             )
         }
 
-        // 6. VPN Tunnel Interface Status
+        // 7. وضعیت تونل فعال وی‌پی‌ان
         val isTunnelActive = AzadiVpnService.vpnStatusFlow.value is VpnServiceStatus.Running
         steps.add(
             DiagnosticStep(
@@ -169,17 +237,28 @@ class NetworkDiagnostics(
             )
         )
 
-        // Overall status computation
+        // 8. ماتریس هوشمند تشخیص «نت ملی»
+        // اگر ترافیک یا سرورهای داخلی در دسترس هستند اما اتصال TCP/HTTPS بین‌الملل مسدود است -> نت ملی
+        val isNationalIntranet = domesticReachable && !directTcpSuccess && !directGlobalVerified
+
         val overallStatus = when {
-            isTunnelActive && directGlobalVerified -> "دسترسی خارجی از مسیر تونل تأیید شده است."
-            isTunnelActive -> "تونل فعال است، اما دسترسی خارجی به تمام مقاصد تأیید نشده است."
+            isTunnelActive && directGlobalVerified -> "دسترسی خارجی از مسیر تونل امن تأیید شده است."
+            isTunnelActive -> "تونل فعال است، اما ارتباط با تمام مقاصد خارجی تأیید نشده است."
+            isNationalIntranet -> "وضعیت شبکه ملی (نت ملی): دسترسی به اینترنت بین‌المللی قطع است و فقط شبکه داخلی فعال می‌باشد."
             directGlobalVerified -> "اینترنت مستقیم بدون محدودیت در دسترس است."
+            dnsPoisoned -> "شبکه تحت اختلال و مسموم‌سازی شدید DNS قرار دارد."
             dnsWorking && !directTcpSuccess -> "اینترنت محدود یا ناپایدار است (فیلترینگ ترافیک مستقیم)."
-            !dnsWorking && !directTcpSuccess -> "مسیر خارجی در دسترس نیست یا شبکه کاملاً محدود است."
-            else -> "نتیجه قطعی نیست. لطفاً آزمایش مجدد انجام دهید."
+            !dnsWorking && !directTcpSuccess -> "مسیر خارجی در دسترس نیست یا شبکه کاملاً قطع است."
+            else -> "نتیجه آزمون قطعی نیست. لطفاً مجدداً بررسی نمایید."
         }
 
-        // Log result to database
+        if (isNationalIntranet) {
+            AppLogger.w("DIAGNOSTIC", "تشخیص حالت نت ملی (شبکه ملی اطلاعات): سرورهای داخلی باز ولی اینترنت جهانی مسدود است.")
+        } else {
+            AppLogger.i("DIAGNOSTIC", "نتیجه پایش شبکه: $overallStatus")
+        }
+
+        // ثبت گزارش در دیتابیس
         repository.logDiagnostic(
             networkType = networkType,
             statusPersian = overallStatus,
@@ -196,6 +275,7 @@ class NetworkDiagnostics(
             isCurrentEndpointReachable = directTcpSuccess,
             isTunnelActive = isTunnelActive,
             isTunnelGlobalVerified = isTunnelActive && directGlobalVerified,
+            isNationalIntranet = isNationalIntranet,
             overallStatusPersian = overallStatus,
             steps = steps
         )
