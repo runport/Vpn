@@ -43,6 +43,7 @@ import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.QrCode2
+import androidx.compose.material.icons.filled.RadioButtonChecked
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Security
@@ -117,6 +118,8 @@ fun ConfigsScreen(
     val context = LocalContext.current
 
     val connectedConfigId = (connectionState as? ConnectionState.Connected)?.config?.id
+    val selectedConfigId by viewModel.selectedConfigId.collectAsState()
+    val selectedTargetType by viewModel.selectedTargetType.collectAsState()
 
     RtlProvider {
         Column(
@@ -406,9 +409,12 @@ fun ConfigsScreen(
                 ) {
                     items(configs, key = { it.id }) { item ->
                         val isItemConnected = connectedConfigId == item.id
+                        val isItemSelected = (selectedTargetType == "CONFIG" && selectedConfigId == item.id)
                         ConfigListItemEnhanced(
                             config = item,
                             isConnected = isItemConnected,
+                            isSelected = isItemSelected,
+                            onSelect = { viewModel.selectConfig(item) },
                             onConnect = {
                                 if (isItemConnected) {
                                     viewModel.disconnect()
@@ -461,6 +467,8 @@ fun ConfigsScreen(
 fun ConfigListItemEnhanced(
     config: ConfigItem,
     isConnected: Boolean,
+    isSelected: Boolean = false,
+    onSelect: () -> Unit = {},
     onConnect: () -> Unit,
     onTest: () -> Unit,
     onDelete: () -> Unit,
@@ -483,15 +491,60 @@ fun ConfigListItemEnhanced(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .clickable { onConnect() }
+            .clickable {
+                onSelect()
+            }
             .testTag("config_item_${config.id}"),
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (isConnected) Color(0xFF0D2E1A) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
         ),
-        border = if (isConnected) BorderStroke(2.dp, Color(0xFF00E676)) else null
+        border = when {
+            isConnected -> BorderStroke(2.dp, Color(0xFF00E676))
+            isSelected -> BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+            else -> null
+        }
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
+            // Selected Banner (when this config is selected for execution)
+            if (isSelected && !isConnected) {
+                Surface(
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.RadioButtonChecked,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "کانفیگ انتخابی شما برای اجرا",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+
+                        Text(
+                            text = "آماده اتصال",
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
+
             // Connected Active Banner (Visible when this config is connected)
             if (isConnected) {
                 Surface(

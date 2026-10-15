@@ -51,6 +51,7 @@ class V2raySettingsManager(private val context: Context) {
         val localSocksPort = prefs.getInt("local_socks_port", 10808)
         val localHttpPort = prefs.getInt("local_http_port", 10809)
         val autoReconnect = prefs.getBoolean("auto_reconnect", true)
+        val autoSwitchOnFailure = prefs.getBoolean("auto_switch_on_failure", false)
 
         return V2raySettings(
             routingMode = routingMode,
@@ -69,7 +70,8 @@ class V2raySettingsManager(private val context: Context) {
             allowLanSharing = allowLanSharing,
             localSocksPort = localSocksPort,
             localHttpPort = localHttpPort,
-            autoReconnect = autoReconnect
+            autoReconnect = autoReconnect,
+            autoSwitchOnFailure = autoSwitchOnFailure
         )
     }
 
@@ -92,8 +94,37 @@ class V2raySettingsManager(private val context: Context) {
             putInt("local_socks_port", s.localSocksPort)
             putInt("local_http_port", s.localHttpPort)
             putBoolean("auto_reconnect", s.autoReconnect)
+            putBoolean("auto_switch_on_failure", s.autoSwitchOnFailure)
             apply()
         }
+    }
+
+    // Persistent Target Selection (Selected Configuration & Proxy)
+    private val _selectedConfigId = MutableStateFlow(prefs.getLong("selected_config_id", -1L))
+    val selectedConfigId = _selectedConfigId.asStateFlow()
+
+    private val _selectedProxyId = MutableStateFlow(prefs.getLong("selected_proxy_id", -1L))
+    val selectedProxyId = _selectedProxyId.asStateFlow()
+
+    private val _selectedTargetType = MutableStateFlow(prefs.getString("selected_target_type", "CONFIG") ?: "CONFIG")
+    val selectedTargetType = _selectedTargetType.asStateFlow()
+
+    fun setSelectedConfigId(id: Long) {
+        _selectedConfigId.value = id
+        _selectedTargetType.value = "CONFIG"
+        prefs.edit()
+            .putLong("selected_config_id", id)
+            .putString("selected_target_type", "CONFIG")
+            .apply()
+    }
+
+    fun setSelectedProxyId(id: Long) {
+        _selectedProxyId.value = id
+        _selectedTargetType.value = "PROXY"
+        prefs.edit()
+            .putLong("selected_proxy_id", id)
+            .putString("selected_target_type", "PROXY")
+            .apply()
     }
 
     suspend fun getInstalledApplications(): List<AppPackageInfo> = withContext(Dispatchers.IO) {

@@ -115,17 +115,27 @@ class ConnectionManager(
             val settings = com.example.AzadiYarApp.instance.v2raySettingsManager.getSettings()
             val testResult = tester.testConfig(config, testMode = settings.testMode, testUrl = settings.realDelayTestUrl)
             if (testResult.status == com.example.core.model.TestStatus.FAILED) {
-                AppLogger.w("CONN", "سرور انتخابی پاسخ نداد: ${testResult.errorMessage}")
-                if (autoRecoveryEnabled) {
+                AppLogger.w("CONN", "سرور انتخابی «${config.remarks}» پاسخ نداد: ${testResult.errorMessage}")
+                scope.launch {
+                    repository.updateTestResult(
+                        id = config.id,
+                        status = com.example.core.model.TestStatus.FAILED,
+                        pingMs = -1,
+                        score = 0,
+                        errorMessage = testResult.errorMessage,
+                        isSuccess = false
+                    )
+                }
+                if (settings.autoSwitchOnFailure && reconnectAttempts < maxReconnectAttempts) {
                     failedConfigIdsInSession.add(config.id)
                     triggerAutoRecovery("سرور انتخابی پاسخ نداد، جستجوی مسیر جایگزین...")
                 } else {
-                    _connectionState.value = ConnectionState.Error("سرور در دسترس نیست: ${testResult.errorMessage}")
+                    _connectionState.value = ConnectionState.Error("عدم پاسخ از سرور انتخابی «${config.remarks}»: ${testResult.errorMessage ?: "تایم‌اوت یا مسدود بودن پورت"}")
                 }
                 return@launch
             }
 
-            AppLogger.i("CONN", "پاسخ اولیه سرور موفقیت‌آمیز بود (پینگ: ${testResult.pingMs}ms). ایجاد تونل امنیتی...")
+            AppLogger.i("CONN", "پاسخ اولیه سرور «${config.remarks}» موفقیت‌آمیز بود (پینگ: ${testResult.pingMs}ms). ایجاد تونل امنیتی...")
             _connectionState.value = ConnectionState.Connecting(config.remarks, "در حال ایجاد رابط شبکه امن...")
             dispatchVpnIntent(config.id, config.server, config.port, config.remarks, config.protocol.name, isProxy = false)
         }
@@ -231,7 +241,8 @@ class ConnectionManager(
                 )
             }
         }
-        if (failed != null && autoRecoveryEnabled && reconnectAttempts < maxReconnectAttempts) {
+        val settings = com.example.AzadiYarApp.instance.v2raySettingsManager.getSettings()
+        if (failed != null && settings.autoSwitchOnFailure && reconnectAttempts < maxReconnectAttempts) {
             triggerAutoRecovery(reason)
         } else {
             _connectionState.value = ConnectionState.Error(

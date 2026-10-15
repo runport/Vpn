@@ -449,11 +449,29 @@ fun SettingsScreen(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text("اتصال مجدد خودکار (Auto Reconnect)", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                            Text("در صورت قطعی ارتباط یا تغییر اینترنت (وای‌فای/همراه)، بهترین مسیر سالم به سرعت وصل می‌شود.", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("در صورت قطعی ارتباط یا تغییر اینترنت (وای‌فای/همراه)، اتصال مجدداً برقرار می‌شود.", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         Switch(
                             checked = settings.autoReconnect,
                             onCheckedChange = { viewModel.updateV2raySettings(settings.copy(autoReconnect = it)) }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Auto switch on failure toggle (Failover rotation)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("چرخش خودکار به سرور بعدی در صورت خطا (Failover)", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            Text("در صورت خاموش بودن، فقط کانفیگ یا پروکسی انتخابی اجرا می‌شود و برنامه بین سرورها چرخش نمی‌کند.", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Switch(
+                            checked = settings.autoSwitchOnFailure,
+                            onCheckedChange = { viewModel.updateV2raySettings(settings.copy(autoSwitchOnFailure = it)) }
                         )
                     }
                 }

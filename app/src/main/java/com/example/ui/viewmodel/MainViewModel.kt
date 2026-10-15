@@ -188,11 +188,63 @@ class MainViewModel : ViewModel() {
 
     val systemLogs: StateFlow<List<com.example.diagnostics.LogItem>> = com.example.diagnostics.AppLogger.logsFlow
 
+    val selectedConfigId: StateFlow<Long> = v2raySettingsManager.selectedConfigId
+    val selectedProxyId: StateFlow<Long> = v2raySettingsManager.selectedProxyId
+    val selectedTargetType: StateFlow<String> = v2raySettingsManager.selectedTargetType
+
+    val selectedConfig: StateFlow<ConfigItem?> = combine(
+        repository.getAllConfigsFlow(),
+        selectedConfigId
+    ) { configs, id ->
+        if (id > 0) {
+            configs.find { it.id == id } ?: configs.firstOrNull()
+        } else {
+            configs.firstOrNull()
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val selectedProxy: StateFlow<ProxyItem?> = combine(
+        repository.getAllProxiesFlow(),
+        selectedProxyId
+    ) { proxies, id ->
+        if (id > 0) {
+            proxies.find { it.id == id } ?: proxies.firstOrNull()
+        } else {
+            proxies.firstOrNull()
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    fun selectConfig(config: ConfigItem) {
+        v2raySettingsManager.setSelectedConfigId(config.id)
+    }
+
+    fun selectProxy(proxy: ProxyItem) {
+        v2raySettingsManager.setSelectedProxyId(proxy.id)
+    }
+
+    fun connectSelectedTarget() {
+        if (selectedTargetType.value == "PROXY") {
+            val proxy = selectedProxy.value
+            if (proxy != null) {
+                connectProxy(proxy)
+                return
+            }
+        }
+        val config = selectedConfig.value
+        if (config != null) {
+            connect(config)
+        } else {
+            connectSmart()
+        }
+    }
+
     fun connect(config: ConfigItem) {
+        selectConfig(config)
         connectionManager.connect(config)
     }
 
     fun connectProxy(proxy: ProxyItem) {
+        selectProxy(proxy)
         connectionManager.connectProxy(proxy)
     }
 

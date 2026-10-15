@@ -43,6 +43,7 @@ import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.QrCode2
+import androidx.compose.material.icons.filled.RadioButtonChecked
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Stop
@@ -109,6 +110,8 @@ fun ProxiesScreen(
     val context = LocalContext.current
 
     val connectedProxyId = (connectionState as? ConnectionState.Connected)?.proxy?.id
+    val selectedProxyId by viewModel.selectedProxyId.collectAsState()
+    val selectedTargetType by viewModel.selectedTargetType.collectAsState()
 
     RtlProvider {
         Column(
@@ -352,9 +355,12 @@ fun ProxiesScreen(
                 ) {
                     items(proxies, key = { it.id }) { proxy ->
                         val isProxyConnected = connectedProxyId == proxy.id
+                        val isProxySelected = (selectedTargetType == "PROXY" && selectedProxyId == proxy.id)
                         ProxyItemCard(
                             proxy = proxy,
                             isConnected = isProxyConnected,
+                            isSelected = isProxySelected,
+                            onSelect = { viewModel.selectProxy(proxy) },
                             onConnect = {
                                 if (isProxyConnected) {
                                     viewModel.disconnect()
@@ -417,6 +423,8 @@ fun ProxiesScreen(
 fun ProxyItemCard(
     proxy: ProxyItem,
     isConnected: Boolean,
+    isSelected: Boolean = false,
+    onSelect: () -> Unit = {},
     onConnect: () -> Unit,
     onTest: () -> Unit,
     onShareQr: () -> Unit,
@@ -439,15 +447,57 @@ fun ProxyItemCard(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .clickable { onConnect() }
+            .clickable { onSelect() }
             .testTag("proxy_item_${proxy.id}"),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (isConnected) Color(0xFF0D2E1A) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
         ),
-        border = if (isConnected) BorderStroke(2.dp, Color(0xFF00E676)) else null
+        border = when {
+            isConnected -> BorderStroke(2.dp, Color(0xFF00E676))
+            isSelected -> BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+            else -> null
+        }
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
+            // Selected Banner
+            if (isSelected && !isConnected) {
+                Surface(
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.RadioButtonChecked,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "پروکسی انتخابی شما برای اجرا",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+
+                        Text(
+                            text = "آماده اتصال",
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
             // Connected Active Banner
             if (isConnected) {
                 Surface(

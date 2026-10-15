@@ -123,6 +123,7 @@ data class V2raySettings(
     val allowLanSharing: Boolean = false,
     val localSocksPort: Int = 10808,
     val localHttpPort: Int = 10809,
-    val autoReconnect: Boolean = true
+    val autoReconnect: Boolean = true,
+    val autoSwitchOnFailure: Boolean = false // When false, never rotate/cycle to other configs on failure!
 )
 
